@@ -1,3 +1,5 @@
+import { newScanner } from "./scanner"
+
 interface Token {
 	range: [number, number]
 	toString(): string
@@ -41,5 +43,7 @@ export interface ParamColorHexValue extends Token {
 type V = ParamString | ParamColorKeyword | ParamColorHexValue | ParamFunction<V> | ParamColorFunction<V>
 
 export function parseCssValue(value: string): LegacyParams<V> | ModernParams<V> | undefined {
+	const arr = Array.from(newScanner(value))
+
 	return
 }
