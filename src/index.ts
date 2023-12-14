@@ -1,4 +1,4 @@
-import { type Token, ExprScanner } from "./scanner"
+import { ExprScanner, TokenType } from "./parser/scanner"
 
 const tests = [
 	"rgb(1,   22,   3 )",
@@ -23,16 +23,15 @@ const others = [
 	"max(2, 3)",
 ]
 
-for (const v of tests) {
-	const s = new ExprScanner(v)
-
-	let i = 0
-	for (const t of s) {
-		console.log(i++, t.toString())
-	}
-}
+// for (const v of tests) {
+// 	const s = new ExprScanner(v)
+// 	console.log(Array.from(s).map(s => s.toString()))
+// }
 
 for (const v of others) {
 	const s = new ExprScanner(v)
-	console.log(Array.from(s).map(s => s.toString()))
+	console.log("________", v)
+	for (const t of s) {
+		console.log(TokenType[t.type], t.toString())
+	}
 }
