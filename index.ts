@@ -1,4 +1,4 @@
-import { type Token, newScanner } from "./scanner"
+import { type Token, ExprScanner } from "./scanner"
 
 const tests = [
 	"rgb(1,   22,   3 )",
@@ -24,7 +24,7 @@ const others = [
 ]
 
 for (const v of tests) {
-	const s = newScanner(v)
+	const s = new ExprScanner(v)
 
 	let i = 0
 	for (const t of s) {
@@ -33,6 +33,6 @@ for (const v of tests) {
 }
 
 for (const v of others) {
-	const s = newScanner(v)
+	const s = new ExprScanner(v)
 	console.log(Array.from(s).map(s => s.toString()))
 }
