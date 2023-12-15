@@ -73,6 +73,8 @@ export enum TokenType {
 	Percentage,
 	Dimension,
 
+	UnicodeRange,
+
 	Comma,
 	Slash,
 	ParenthesisL,
@@ -130,7 +132,6 @@ staticUnitTable["fr"] = TokenType.Percentage
 export interface Token {
 	type: TokenType
 	range: [number, number]
-	toString(): string
 }
 
 export class Reader {
@@ -155,8 +156,16 @@ export class Reader {
 		return this.source.charCodeAt(this.position + n) || ASCII.EOF
 	}
 
+	public lookbackChar(n = 0) {
+		return this.source.charCodeAt(this.position - n) || ASCII.EOF
+	}
+
 	public pos() {
 		return this.position
+	}
+
+	public goBackTo(pos: number) {
+		this.position = pos
 	}
 
 	public goBack(n: number) {
@@ -167,10 +176,6 @@ export class Reader {
 		this.position += n
 	}
 
-	public goTo(n: number) {
-		this.position = n
-	}
-
 	public goIfChar(ch: number): boolean {
 		if (ch === this.source.charCodeAt(this.position)) {
 			this.position++
@@ -179,7 +184,7 @@ export class Reader {
 		return false
 	}
 
-	public goIfChars(ch: number[]): boolean {
+	public goIfChars(...ch: number[]): boolean {
 		if (this.position + ch.length > this.source.length) {
 			return false
 		}
@@ -206,6 +211,14 @@ export class Reader {
 	}
 }
 
+function isDigit(ch: number) {
+	return ch >= ASCII._0 && ch <= ASCII._9
+}
+
+function isHexDigit(ch: number) {
+	return (ch >= ASCII._0 && ch <= ASCII._9) || (ch >= ASCII._a && ch <= ASCII._f) || (ch >= ASCII._A && ch <= ASCII._F)
+}
+
 type ConsumeResult = [number, true] | false
 
 export class ExprScanner {
@@ -221,13 +234,9 @@ export class ExprScanner {
 	}
 
 	public finishToken(type: TokenType, a: number, b: number): Token {
-		const toString = () => {
-			return this.stream.slice(a, b)
-		}
 		return {
 			type,
 			range: [a, b],
-			toString,
 		}
 	}
 
@@ -239,7 +248,7 @@ export class ExprScanner {
 	}
 
 	public comment(): boolean {
-		if (this.stream.goIfChars([ASCII.slash, ASCII.asterisk])) {
+		if (this.stream.goIfChars(ASCII.slash, ASCII.asterisk)) {
 			let success = false
 			let hot = false
 			this.stream.goWhileChar(ch => {
@@ -287,10 +296,10 @@ export class ExprScanner {
 			npeek = 1
 		}
 		let ch = this.stream.peekChar(npeek)
-		if (ch >= ASCII._0 && ch <= ASCII._9) {
+		if (isDigit(ch)) {
 			this.stream.goAdd(npeek + 1)
 			this.stream.goWhileChar(ch => {
-				return (ch >= ASCII._0 && ch <= ASCII._9) || (npeek === 0 && ch === ASCII.dot)
+				return isDigit(ch) || (npeek === 0 && ch === ASCII.dot)
 			})
 			return true
 		}
@@ -347,6 +356,26 @@ export class ExprScanner {
 		return false
 	}
 
+	private unicodeRange(): boolean {
+		// follow https://www.w3.org/TR/CSS21/syndata.html#tokenization and https://www.w3.org/TR/css-syntax-3/#urange-syntax
+		// assume u has already been parsed
+
+		if (this.stream.goIfChar(ASCII.plus)) {
+			const codePoints = this.stream.goWhileChar(isHexDigit) + this.stream.goWhileChar(ch => ch === ASCII.question)
+			if (codePoints >= 1 && codePoints <= 6) {
+				if (this.stream.goIfChar(ASCII.hyphen)) {
+					const digits = this.stream.goWhileChar(isHexDigit)
+					if (digits >= 1 && digits <= 6) {
+						return true
+					}
+				} else {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
 	private escape(includeNewLines?: boolean): ConsumeResult {
 		let ch = this.stream.peekChar()
 		if (ch === ASCII.backslash) {
@@ -355,10 +384,7 @@ export class ExprScanner {
 			let hexNumCount = 0
 			let pos = this.stream.pos()
 
-			while (
-				hexNumCount < 6 &&
-				((ch >= ASCII._0 && ch <= ASCII._9) || (ch >= ASCII._a && ch <= ASCII._f) || (ch >= ASCII._A && ch <= ASCII._F))
-			) {
+			while (hexNumCount < 6 && isHexDigit(ch)) {
 				this.stream.goAdd(1)
 				ch = this.stream.peekChar()
 				hexNumCount++
@@ -416,7 +442,7 @@ export class ExprScanner {
 			}
 			return result
 		}
-		this.stream.goTo(pos)
+		this.stream.goBackTo(pos)
 		return false
 	}
 
@@ -466,13 +492,22 @@ export class ExprScanner {
 		return this
 	}
 
-	public next(): IteratorResult<Token> {
+	public next(): IteratorResult<Token, Token> {
 		this.trivia()
 		const offset = this.stream.pos()
 		if (this.stream.eos()) {
 			return { value: this.finishToken(TokenType.EOF, offset, offset), done: true }
 		}
 		return { value: this.scanNext(offset) }
+	}
+
+	public tryScanUnicode(): Token | undefined {
+		const offset = this.stream.pos()
+		if (!this.stream.eos() && this.unicodeRange()) {
+			return this.finishToken(TokenType.UnicodeRange, offset, this.stream.pos())
+		}
+		this.stream.goBackTo(offset)
+		return undefined
 	}
 
 	public scanNext(offset: number): Token {
@@ -520,7 +555,7 @@ export class ExprScanner {
 		// String, BadString
 		const ret = this.string()
 		if (ret) {
-			return this.finishToken(ret[1], offset, ret[0])
+			return this.finishToken(ret[1], offset + 1, ret[0])
 		}
 
 		const tokenType = staticTokenTable[this.stream.peekChar()]

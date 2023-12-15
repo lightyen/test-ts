@@ -21,6 +21,8 @@ const others = [
 	"url(data:image/png;base64,iRxVB0) url(star.svg)",
 	"url(data:image/png;base64,iRxVB0\\) url(star.svg)",
 	"max(2, 3)",
+	"theme(colors.red.500)",
+	"theme('colors.red.500')",
 ]
 
 // for (const v of tests) {
