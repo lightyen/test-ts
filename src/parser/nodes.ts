@@ -95,16 +95,19 @@ export class Node {
 		return this
 	}
 
-	public setNode(field: keyof this, node: Node | null, index: number = -1): boolean {
-		type V = Omit
+	public setNode(field: VVV<this, Node>, node: Node | null, index: number = -1): boolean {
 		if (node) {
 			node.attachTo(this, index)
-			;(<any>this)[field] = node
+			this[field] = node
 			return true
 		}
 		return false
 	}
 }
+
+type VVV<T extends object, V> = {
+	[K in keyof T]: T[K] extends V ? K : never
+}[keyof T]
 
 export class Nodelist extends Node {
 	constructor(parent: Node, index: number = -1) {
