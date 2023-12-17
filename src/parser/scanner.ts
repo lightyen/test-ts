@@ -1,63 +1,8 @@
-enum ASCII {
-	EOF = 0,
-	TAB = "\t".charCodeAt(0),
-	Newline = "\n".charCodeAt(0),
-	VT = "\v".charCodeAt(0),
-	FF = "\f".charCodeAt(0),
-	CR = "\r".charCodeAt(0),
-
-	_a = "a".charCodeAt(0),
-	_f = "f".charCodeAt(0),
-	_z = "z".charCodeAt(0),
-	_A = "A".charCodeAt(0),
-	_F = "F".charCodeAt(0),
-	_Z = "Z".charCodeAt(0),
-	_0 = "0".charCodeAt(0),
-	_9 = "9".charCodeAt(0),
-
-	whitespace = " ".charCodeAt(0),
-	bang = "!".charCodeAt(0),
-	doubleQuote = '"'.charCodeAt(0),
-	singleQuote = "'".charCodeAt(0),
-	asterisk = "*".charCodeAt(0),
-	hyphen = "-".charCodeAt(0),
-	slash = "/".charCodeAt(0),
-	backslash = "\\".charCodeAt(0),
-
-	leftParenthesis = "(".charCodeAt(0),
-	rightParenthesis = ")".charCodeAt(0),
-	leftBracket = "[".charCodeAt(0),
-	rightBracket = "]".charCodeAt(0),
-	leftCurly = "{".charCodeAt(0),
-	rightCurly = "}".charCodeAt(0),
-	leftThan = "<".charCodeAt(0),
-	rightThan = ">".charCodeAt(0),
-
-	hash = "#".charCodeAt(0),
-	at = "@".charCodeAt(0),
-	question = "?".charCodeAt(0),
-	plus = "+".charCodeAt(0),
-	comma = ",".charCodeAt(0),
-	dot = ".".charCodeAt(0),
-	semicolon = ";".charCodeAt(0),
-	colon = ":".charCodeAt(0),
-	percent = "%".charCodeAt(0),
-	underscore = "_".charCodeAt(0),
-}
-
-function isCharSpace(char: number) {
-	if (char === ASCII.whitespace) {
-		return true
-	}
-	if (char >= 0x09 && char <= 0x0d) {
-		return true
-	}
-	return false
-}
+import * as ASCII from "./ascii"
 
 export enum TokenType {
 	EOF,
-	Ident,
+	Identifier,
 	String, // quoted
 	BadString, // quoted
 	SemiColon,
@@ -72,6 +17,8 @@ export enum TokenType {
 	Freq,
 	Percentage,
 	Dimension,
+	Resolution,
+	ContainerQueryLength,
 
 	UnicodeRange,
 
@@ -82,23 +29,13 @@ export enum TokenType {
 	BracketL,
 	BracketR,
 	Hash,
+
 	Delim,
-
-	// bang = ASCII.bang,
-	// doubleQuote = ASCII.doubleQuote,
-	// singleQuote = ASCII.singleQuote,
-	// asterisk = ASCII.asterisk,
-	// hyphen = ASCII.hyphen,
-	// slash = ASCII.slash,
-	// backslash = ASCII.backslash,
-	// leftParenthesis = ASCII.leftParenthesis,
-	// rightParenthesis = ASCII.rightParenthesis,
-	// leftBracket = ASCII.leftBracket,
-	// rightBracket = ASCII.rightBracket,
-	// leftCurly = ASCII.leftCurly,
-	// rightCurly = ASCII.rightCurly,
-
-	comma = ASCII.comma,
+	Includes,
+	Dashmatch, // |=
+	SubstringOperator, // *=
+	PrefixOperator, // ^=
+	SuffixOperator, // $=
 }
 
 const staticTokenTable: Record<number, TokenType> = {}
@@ -128,23 +65,50 @@ staticUnitTable["hz"] = TokenType.Freq
 staticUnitTable["khz"] = TokenType.Freq
 staticUnitTable["%"] = TokenType.Percentage
 staticUnitTable["fr"] = TokenType.Percentage
+staticUnitTable["dpi"] = TokenType.Resolution
+staticUnitTable["dpcm"] = TokenType.Resolution
+staticUnitTable["cqw"] = TokenType.ContainerQueryLength
+staticUnitTable["cqh"] = TokenType.ContainerQueryLength
+staticUnitTable["cqi"] = TokenType.ContainerQueryLength
+staticUnitTable["cqb"] = TokenType.ContainerQueryLength
+staticUnitTable["cqmin"] = TokenType.ContainerQueryLength
+staticUnitTable["cqmax"] = TokenType.ContainerQueryLength
 
-export interface Token {
-	type: TokenType
-	range: [number, number]
+// export interface Token {
+// 	type: TokenType
+// 	start: number
+// 	end: number
+// 	typeStr(): string
+// }
+
+export class Token {
+	constructor(
+		readonly type: TokenType,
+		readonly start: number,
+		readonly end: number,
+	) {}
+
+	get typeText(): string {
+		return "#" + TokenType[this.type]
+	}
+
+	getText(source: string) {
+		return source.slice(this.start, this.end)
+	}
 }
 
 export class Reader {
-	private source: string
-	private len: number
-	private position: number
+	public source: string
+	public len: number
+	public position: number
+
 	constructor(input: string) {
 		this.source = input
 		this.len = input.length
 		this.position = 0
 	}
 
-	public slice(a: number, b?: number) {
+	public slice(a?: number, b?: number) {
 		return this.source.slice(a, b)
 	}
 
@@ -221,9 +185,9 @@ function isHexDigit(ch: number) {
 
 type ConsumeResult = [number, true] | false
 
-export class ExprScanner {
+export class Scanner {
 	private stream = new Reader("")
-	public inURL = false
+	protected inURL = false
 
 	constructor(input = "") {
 		this.stream = new Reader(input)
@@ -233,12 +197,23 @@ export class ExprScanner {
 		this.stream = new Reader(input)
 	}
 
-	public finishToken(type: TokenType, a: number, b: number): Token {
-		return {
-			type,
-			range: [a, b],
-		}
+	public get source(): string {
+		return this.stream.source
 	}
+
+	public finishToken(type: TokenType, start: number, end: number): Token {
+		return new Token(type, start, end)
+	}
+
+	public pos(): number {
+		return this.stream.pos()
+	}
+
+	public goBackTo(pos: number): void {
+		this.stream.goBackTo(pos)
+	}
+
+	///
 
 	public whitespace(): boolean {
 		const n = this.stream.goWhileChar(
@@ -512,7 +487,7 @@ export class ExprScanner {
 
 	public scanNext(offset: number): Token {
 		if (this.ident()) {
-			return this.finishToken(TokenType.Ident, offset, this.stream.pos())
+			return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
 		}
 
 		if (this.stream.goIfChar(ASCII.hash)) {

@@ -1,4 +1,6 @@
-import { ExprScanner, TokenType } from "./parser/scanner"
+import { Node, NodeType } from "./parser/nodes"
+import { Parser } from "./parser/parser"
+import { Scanner, TokenType } from "./parser/scanner"
 
 const tests = [
 	"rgb(1,   22,   3 )",
@@ -30,10 +32,35 @@ const others = [
 // 	console.log(Array.from(s).map(s => s.toString()))
 // }
 
-for (const v of others) {
-	const s = new ExprScanner(v)
-	console.log("________", v)
-	for (const t of s) {
-		console.log(TokenType[t.type], t.toString())
-	}
+// for (const v of others) {
+// 	const s = new ExprScanner(v)
+// 	console.log("________", v)
+// 	for (const t of s) {
+// 		console.log(TokenType[t.type], t.toString())
+// 	}
+// }
+
+const scanner = new Scanner("")
+
+for (const t of scanner) {
+	console.log(t)
 }
+
+// const parser = new Parser()
+
+// console.log("hsl(160 42 30%)")
+
+// const node = parser.myparse("hsl(160 42 30%)")
+// dump(node)
+// function dump(node?: Node) {
+// 	if (!node) {
+// 		return
+// 	}
+// 	console.log("n", NodeType[node.type], node.toString())
+// 	console.log("---")
+// 	if (node.children) {
+// 		for (const n of node.children) {
+// 			dump(n)
+// 		}
+// 	}
+// }
