@@ -409,19 +409,7 @@ export class Parser {
 	}
 
 	public parseNumeric(): nodes.NumericValue | undefined {
-		if (
-			this.peek(TokenType.Num) ||
-			this.peek(TokenType.Percentage) ||
-			this.peek(TokenType.Resolution) ||
-			this.peek(TokenType.Length) ||
-			this.peek(TokenType.EMS) ||
-			this.peek(TokenType.EXS) ||
-			this.peek(TokenType.Angle) ||
-			this.peek(TokenType.Time) ||
-			this.peek(TokenType.Dimension) ||
-			this.peek(TokenType.ContainerQueryLength) ||
-			this.peek(TokenType.Freq)
-		) {
+		if (this.peek(TokenType.Num) || this.peek(TokenType.Percentage) || this.peek(TokenType.Dimension)) {
 			const node = this.create(nodes.NumericValue)
 			this.consumeToken()
 			return <nodes.NumericValue>this.finish(node)

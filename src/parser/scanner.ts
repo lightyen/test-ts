@@ -9,16 +9,14 @@ export enum TokenType {
 	Exclamation,
 
 	Num,
-	EMS, // 3em
-	EXS, // 3ex
-	Length,
-	Angle,
-	Time,
-	Freq,
 	Percentage,
 	Dimension,
-	Resolution,
-	ContainerQueryLength,
+	// Length,
+	// Angle,
+	// Time,
+	// Freq,
+	// Resolution,
+	// ContainerQueryLength,
 
 	UnicodeRange,
 
@@ -47,32 +45,63 @@ staticTokenTable[ASCII.rightParenthesis] = TokenType.ParenthesisR
 staticTokenTable[ASCII.comma] = TokenType.Comma
 staticTokenTable[ASCII.slash] = TokenType.Slash
 
+// https://developer.mozilla.org/en-US/docs/Web/CSS/length
 const staticUnitTable: Record<string, TokenType> = {}
-staticUnitTable["em"] = TokenType.EMS
-staticUnitTable["ex"] = TokenType.EXS
-staticUnitTable["px"] = TokenType.Length
-staticUnitTable["cm"] = TokenType.Length
-staticUnitTable["mm"] = TokenType.Length
-staticUnitTable["in"] = TokenType.Length
-staticUnitTable["pt"] = TokenType.Length
-staticUnitTable["pc"] = TokenType.Length
-staticUnitTable["deg"] = TokenType.Angle
-staticUnitTable["rad"] = TokenType.Angle
-staticUnitTable["grad"] = TokenType.Angle
-staticUnitTable["ms"] = TokenType.Time
-staticUnitTable["s"] = TokenType.Time
-staticUnitTable["hz"] = TokenType.Freq
-staticUnitTable["khz"] = TokenType.Freq
-staticUnitTable["%"] = TokenType.Percentage
+// staticUnitTable["em"] = TokenType.Length
+// staticUnitTable["ch"] = TokenType.Length
+// staticUnitTable["px"] = TokenType.Length
+// staticUnitTable["cm"] = TokenType.Length
+// staticUnitTable["mm"] = TokenType.Length
+// staticUnitTable["in"] = TokenType.Length
+// staticUnitTable["ic"] = TokenType.Length
+// staticUnitTable["lh"] = TokenType.Length
+// staticUnitTable["pt"] = TokenType.Length
+// staticUnitTable["pc"] = TokenType.Length
+// staticUnitTable["ex"] = TokenType.Length
+// staticUnitTable["cap"] = TokenType.Length
+// staticUnitTable["Q"] = TokenType.Length
+// staticUnitTable["rem"] = TokenType.Length
+// staticUnitTable["rlh"] = TokenType.Length
+
+// staticUnitTable["vb"] = TokenType.Length
+// staticUnitTable["vh"] = TokenType.Length
+// staticUnitTable["vi"] = TokenType.Length
+// staticUnitTable["vmax"] = TokenType.Length
+// staticUnitTable["vmin"] = TokenType.Length
+// staticUnitTable["vw"] = TokenType.Length
+
+// staticUnitTable["dvb"] = TokenType.Length
+// staticUnitTable["dvh"] = TokenType.Length
+// staticUnitTable["dvi"] = TokenType.Length
+// staticUnitTable["dvmax"] = TokenType.Length
+// staticUnitTable["dvmin"] = TokenType.Length
+// staticUnitTable["dvw"] = TokenType.Length
+
+// staticUnitTable["lvb"] = TokenType.Length
+// staticUnitTable["lvh"] = TokenType.Length
+// staticUnitTable["lvi"] = TokenType.Length
+// staticUnitTable["lvmax"] = TokenType.Length
+// staticUnitTable["lvmin"] = TokenType.Length
+// staticUnitTable["lvw"] = TokenType.Length
+
+// staticUnitTable["svb"] = TokenType.Length
+// staticUnitTable["svh"] = TokenType.Length
+// staticUnitTable["svi"] = TokenType.Length
+// staticUnitTable["svmax"] = TokenType.Length
+// staticUnitTable["svmin"] = TokenType.Length
+// staticUnitTable["svw"] = TokenType.Length
+
+// staticUnitTable["deg"] = TokenType.Angle
+// staticUnitTable["rad"] = TokenType.Angle
+// staticUnitTable["grad"] = TokenType.Angle
+
+// staticUnitTable["s"] = TokenType.Time
+// staticUnitTable["ms"] = TokenType.Time
+
+// staticUnitTable["hz"] = TokenType.Freq
+// staticUnitTable["khz"] = TokenType.Freq
+
 staticUnitTable["fr"] = TokenType.Percentage
-staticUnitTable["dpi"] = TokenType.Resolution
-staticUnitTable["dpcm"] = TokenType.Resolution
-staticUnitTable["cqw"] = TokenType.ContainerQueryLength
-staticUnitTable["cqh"] = TokenType.ContainerQueryLength
-staticUnitTable["cqi"] = TokenType.ContainerQueryLength
-staticUnitTable["cqb"] = TokenType.ContainerQueryLength
-staticUnitTable["cqmin"] = TokenType.ContainerQueryLength
-staticUnitTable["cqmax"] = TokenType.ContainerQueryLength
 
 // export interface Token {
 // 	type: TokenType
@@ -515,11 +544,9 @@ export class Scanner {
 				const pos = this.stream.pos()
 				const dim = this.stream.slice(end, pos).toLowerCase()
 				const tokenType = staticUnitTable[dim]
-				if (tokenType != undefined) {
-					// Known dimension 43px
+				if (tokenType) {
 					return this.finishToken(tokenType, offset, pos)
 				} else {
-					// Unknown dimension 43ft
 					return this.finishToken(TokenType.Dimension, offset, pos)
 				}
 			}
