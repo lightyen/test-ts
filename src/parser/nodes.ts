@@ -254,9 +254,7 @@ export class Function extends Node {
 }
 
 export class ColorFunction extends Function {
-	private _r?: number | null
-	private _g?: number | null
-	private _b?: number | null
+	private _c?: number[] | null
 	private _a?: number | null
 
 	static test(node?: Node): node is ColorFunction {
@@ -271,25 +269,11 @@ export class ColorFunction extends Function {
 		return NodeType.ColorFunction
 	}
 
-	public get r(): number {
-		if (this._r === undefined) {
+	public get ch(): number[] {
+		if (this._c === undefined) {
 			this.initColor()
 		}
-		return this._r!
-	}
-
-	public get g(): number {
-		if (this._g === undefined) {
-			this.initColor()
-		}
-		return this._g!
-	}
-
-	public get b(): number {
-		if (this._b === undefined) {
-			this.initColor()
-		}
-		return this._b!
+		return this._c!
 	}
 
 	public get a(): number {
@@ -306,26 +290,29 @@ export class ColorFunction extends Function {
 		}
 
 		let rgb: number[] = []
+		const fnName = this.getName().toLowerCase()
 
 		const legacy = expresions.length > 1
 		if (legacy) {
 			for (let i = 0; i < 3; i++) {
 				const node = expresions[i].getChildren()[0]
+				rgb[i] = 0
 				if (isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					if (unit == null) {
-						rgb[i] = parseFloat(value) / 255.0
+						if (fnName.startsWith("rgb")) {
+							// TODO: hsl
+							rgb[i] = parseFloat(value) / 255.0
+						} else {
+							rgb[i] = parseFloat(value)
+						}
 					} else if (unit === "%") {
 						rgb[i] = parseFloat(value) / 100.0
 					}
-				} else {
-					rgb[i] = 0
 				}
 			}
 
-			this._r = rgb[0]
-			this._g = rgb[1]
-			this._b = rgb[2]
+			this._c = rgb
 			this._a = null
 
 			if (expresions[3]) {
@@ -342,15 +329,38 @@ export class ColorFunction extends Function {
 			return
 		}
 
-		const fnName = this.getName()
-		const terms = expresions[0].getChildren()
-
-		for (let i = 0; i < terms.length; i++) {
-			rgb.push(terms[i]?.text || "")
+		let terms = expresions[0].getChildren()
+		if (fnName === "color") {
+			terms = terms.slice(1)
 		}
 
-		if (terms.length < 3) {
-			return
+		for (let i = 0; i < 3; i++) {
+			const node = terms[i]
+			rgb[i] = 0
+			if (isNumericValue(node)) {
+				const { value, unit } = node.getValue()
+				if (unit == null) {
+					if (fnName.startsWith("rgb")) {
+						rgb[i] = parseFloat(value) / 255.0
+					} else {
+						rgb[i] = parseFloat(value)
+					}
+				} else if (unit === "%") {
+					rgb[i] = parseFloat(value) / 100.0
+				}
+			}
+		}
+
+		this._c = rgb
+		this._a = null
+
+		const node = terms[4]
+		if (isNumericValue(node)) {
+			const { value, unit } = node.getValue()
+			this._a = parseFloat(value)
+			if (unit === "%") {
+				this._a = this._a / 100.0
+			}
 		}
 	}
 }
