@@ -157,8 +157,13 @@ export class Parser {
 	public parseValue(): nodes.Value | undefined {
 		const node = this.create(nodes.Value)
 
-		// children multiple expr, handle comma
-		// parseExpr()
+		node.addChild(this.parseExpr())
+
+		while (this.accept(TokenType.Comma)) {
+			if (!node.addChild(this.parseExpr())) {
+				break
+			}
+		}
 
 		return this.finish(node)
 	}
@@ -166,22 +171,21 @@ export class Parser {
 	public parseExpr(): nodes.Expression | undefined {
 		const node = this.create(nodes.Expression)
 
-		// children multiple terms, handle space
-		// parseTermExpression()
+		while (node.addChild(this.parseTermExpression())) {}
 
 		return this.finish(node)
 	}
 
 	public parseTermExpression(): nodes.Node | undefined {
 		return (
-			// this._parseURILiteral() || // url before function
 			// this._parseUnicodeRange() ||
-			this.parseFunction() || // function before ident
+			this.parseFunction() ||
+			this.parseParentheses() ||
 			this.parseIdentifier() ||
 			this.parseStringLiteral() ||
-			this.parseNumeric()
+			this.parseNumeric() ||
 			// this._parseHexColor() ||
-			// this._parseOperation() ||
+			this.parseOperator()
 			// this._parseNamedLine()
 		)
 	}
@@ -219,7 +223,7 @@ export class Parser {
 		const pos = this.mark()
 		const node = this.create(nodes.Function)
 
-		if (!node.setIdentifier(this.parseFunctionIdentifier())) {
+		if (!node.setIdentifier(this.parseIdentifier())) {
 			return
 		}
 
@@ -230,79 +234,22 @@ export class Parser {
 			return
 		}
 
-		if (colorFunctions.has(fnName)) {
-			const color = this.create(nodes.ColorFunction)
-			if (!color.setIdentifier(node.getIdentifier())) {
-				return
-			}
+		if (colorFunctions.has(fnName.toLowerCase())) {
+			const cNode = this.create(nodes.ColorFunction)
+			cNode.setIdentifier(node.getIdentifier())
+			cNode.setArguments(this.parseValue())
 
+			if (!this.peek(TokenType.ParenthesisR)) {
+				return this.finish(cNode, ParseError.RightParenthesisExpected)
+			}
+			return this.finish(cNode)
+		}
+
+		if (fnName.toLowerCase() === "url") {
 			// TODO:
-			const hasComma = this.accept(TokenType.Comma)
-			console.log("parse term", this.debugCurrent(), hasComma, this.scanner.pos())
-
-			if (color.getArguments().addChild(this.parseTermExpression())) {
-				const modern = !this.accept(TokenType.Comma)
-				console.log("parse term color", modern, this.scanner.pos())
-				if (modern) {
-					let hasOpacity = false
-
-					while (!this.peek(TokenType.EOF)) {
-						if (this.peek(TokenType.ParenthesisR)) {
-							break
-						}
-
-						if (this.accept(TokenType.Slash)) {
-							hasOpacity = true
-							continue
-						}
-
-						if (hasOpacity) {
-							console.log("parse term opacity")
-							if (!color.setOpacity(this.parseTermExpression())) {
-								this.markError(color, ParseError.TermExpected)
-							}
-							continue
-						}
-
-						console.log("parse term color4", this.debugCurrent())
-						if (!color.getArguments().addChild(this.parseTermExpression())) {
-							this.markError(color, ParseError.TermExpected)
-						}
-					}
-
-					if (!color.setOpacity(this.parseTermExpression())) {
-						this.markError(color, ParseError.TermExpected)
-					}
-				} else {
-					while (!this.peek(TokenType.EOF)) {
-						if (this.peek(TokenType.ParenthesisR)) {
-							break
-						}
-						if (!color.getArguments().addChild(this.parseFunctionArgument(true))) {
-							this.markError(color, ParseError.ExpressionExpected)
-						}
-					}
-				}
-			}
-
-			if (!this.accept(TokenType.ParenthesisR)) {
-				return this.finish(color, ParseError.RightParenthesisExpected)
-			}
-
-			return this.finish(color)
 		}
 
-		if (node.getArguments().addChild(this.parseFunctionArgument(true))) {
-			const hasComma = this.accept(TokenType.Comma)
-			while (!this.peek(TokenType.EOF)) {
-				if (this.peek(TokenType.ParenthesisR)) {
-					break
-				}
-				if (!node.getArguments().addChild(this.parseFunctionArgument(hasComma))) {
-					this.markError(node, ParseError.ExpressionExpected)
-				}
-			}
-		}
+		node.setArguments(this.parseValue())
 
 		if (!this.accept(TokenType.ParenthesisR)) {
 			return this.finish(node, ParseError.RightParenthesisExpected)
@@ -310,25 +257,27 @@ export class Parser {
 		return this.finish(node)
 	}
 
-	public parseFunctionIdentifier(): nodes.Identifier | undefined {
-		if (!this.peek(TokenType.Identifier)) {
+	public parseParentheses(): nodes.Parentheses | undefined {
+		const node = this.create(nodes.Parentheses)
+
+		if (!this.accept(TokenType.ParenthesisL)) {
 			return
 		}
 
-		const node = this.create(nodes.Identifier)
-		node.referenceTypes = [nodes.ReferenceType.Function]
-		this.consumeToken()
+		node.setArguments(this.parseValue())
+
+		if (!this.peek(TokenType.ParenthesisR)) {
+			return this.finish(node, ParseError.RightParenthesisExpected)
+		}
+
 		return this.finish(node)
 	}
 
-	public parseIdentifier(referenceTypes?: nodes.ReferenceType[]): nodes.Identifier | undefined {
+	public parseIdentifier(): nodes.Identifier | undefined {
 		if (!this.peek(TokenType.Identifier)) {
 			return
 		}
 		const node = this.create(nodes.Identifier)
-		if (referenceTypes) {
-			node.referenceTypes = referenceTypes
-		}
 		node.isCustomProperty = this.peekRegExp(TokenType.Identifier, /^--/)
 		this.consumeToken()
 		return this.finish(node)

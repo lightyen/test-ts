@@ -1,5 +1,6 @@
 import { Marker } from "./errors"
 import * as ASCII from "./ascii"
+import { TokenType } from "./scanner"
 
 export enum NodeType {
 	Undefined,
@@ -23,12 +24,6 @@ export enum NodeType {
 
 	StringLiteral,
 	Identifier,
-}
-
-export enum ReferenceType {
-	Function,
-	ColorFunction,
-	Unknown,
 }
 
 export interface StringProvider {
@@ -183,7 +178,6 @@ export class Expression extends Node {
 }
 
 export class Identifier extends Node {
-	public referenceTypes?: ReferenceType[]
 	public isCustomProperty = false
 
 	constructor(start: number, end: number) {
@@ -203,6 +197,27 @@ export class Operator extends Node {
 	}
 }
 
+export class Parentheses extends Node {
+	public arguments?: Value
+	public bracket: [number, number]
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.Parentheses)
+		this.bracket = [ASCII.leftParenthesis, ASCII.rightParenthesis]
+	}
+
+	public getArguments(): Value | undefined {
+		return this.arguments
+	}
+
+	public setArguments(node?: Value): node is Value {
+		return this.setNode(node, 0, node => {
+			this.arguments = node
+			this.updateRange(node)
+		})
+	}
+}
+
 export class Function extends Node {
 	public identifier?: Identifier
 	public arguments?: Value
@@ -218,8 +233,8 @@ export class Function extends Node {
 		})
 	}
 
-	public getArguments() {
-		return this.identifier
+	public getArguments(): Value | undefined {
+		return this.arguments
 	}
 
 	public setArguments(node?: Value): node is Value {
