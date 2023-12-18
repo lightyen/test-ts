@@ -27,7 +27,8 @@ export class Parser {
 		if (type !== this.token.type) {
 			return false
 		}
-		return regEx.test(this.token.toString())
+		const raw = this.token.getText(this.scanner.source)
+		return regEx.test(raw)
 	}
 
 	public hasWhitespace(): boolean {
@@ -231,7 +232,7 @@ export class Parser {
 			cNode.setIdentifier(node.getIdentifier())
 			cNode.setArguments(this.parseValue())
 
-			if (!this.peek(TokenType.ParenthesisR)) {
+			if (!this.accept(TokenType.ParenthesisR)) {
 				return this.finish(cNode, ParseError.RightParenthesisExpected)
 			}
 			return this.finish(cNode)
@@ -258,7 +259,7 @@ export class Parser {
 
 		node.setArguments(this.parseValue())
 
-		if (!this.peek(TokenType.ParenthesisR)) {
+		if (!this.accept(TokenType.ParenthesisR)) {
 			return this.finish(node, ParseError.RightParenthesisExpected)
 		}
 

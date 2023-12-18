@@ -257,10 +257,6 @@ export class ColorFunction extends Function {
 	private _c?: number[] | null
 	private _a?: number | null
 
-	static test(node?: Node): node is ColorFunction {
-		return node?.type === NodeType.ColorFunction
-	}
-
 	constructor(start: number, end: number) {
 		super(start, end)
 	}
@@ -269,7 +265,7 @@ export class ColorFunction extends Function {
 		return NodeType.ColorFunction
 	}
 
-	public get ch(): number[] {
+	public get channels(): number[] {
 		if (this._c === undefined) {
 			this.initColor()
 		}
@@ -289,30 +285,30 @@ export class ColorFunction extends Function {
 			return
 		}
 
-		let rgb: number[] = []
+		let ch: number[] = []
 		const fnName = this.getName().toLowerCase()
 
 		const legacy = expresions.length > 1
 		if (legacy) {
 			for (let i = 0; i < 3; i++) {
 				const node = expresions[i].getChildren()[0]
-				rgb[i] = 0
+				ch[i] = 0
 				if (isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					if (unit == null) {
 						if (fnName.startsWith("rgb")) {
 							// TODO: hsl
-							rgb[i] = parseFloat(value) / 255.0
+							ch[i] = parseFloat(value) / 255.0
 						} else {
-							rgb[i] = parseFloat(value)
+							ch[i] = parseFloat(value)
 						}
 					} else if (unit === "%") {
-						rgb[i] = parseFloat(value) / 100.0
+						ch[i] = parseFloat(value) / 100.0
 					}
 				}
 			}
 
-			this._c = rgb
+			this._c = ch
 			this._a = null
 
 			if (expresions[3]) {
@@ -336,22 +332,22 @@ export class ColorFunction extends Function {
 
 		for (let i = 0; i < 3; i++) {
 			const node = terms[i]
-			rgb[i] = 0
+			ch[i] = 0
 			if (isNumericValue(node)) {
 				const { value, unit } = node.getValue()
 				if (unit == null) {
 					if (fnName.startsWith("rgb")) {
-						rgb[i] = parseFloat(value) / 255.0
+						ch[i] = parseFloat(value) / 255.0
 					} else {
-						rgb[i] = parseFloat(value)
+						ch[i] = parseFloat(value)
 					}
 				} else if (unit === "%") {
-					rgb[i] = parseFloat(value) / 100.0
+					ch[i] = parseFloat(value) / 100.0
 				}
 			}
 		}
 
-		this._c = rgb
+		this._c = ch
 		this._a = null
 
 		const node = terms[4]
@@ -363,6 +359,10 @@ export class ColorFunction extends Function {
 			}
 		}
 	}
+}
+
+export function isColorFunction(node?: Node): node is ColorFunction {
+	return node?.type === NodeType.ColorFunction
 }
 
 export class NumericValue extends Node {
@@ -389,39 +389,23 @@ export class NumericValue extends Node {
 	}
 }
 
-export function isNumericValue(node: Node): node is NumericValue {
-	return node.type === NodeType.NumericValue
+export function isNumericValue(node?: Node): node is NumericValue {
+	return node?.type === NodeType.NumericValue
 }
 
 export class HexColorValue extends Node {
-	private _r?: number | null
-	private _g?: number | null
-	private _b?: number | null
+	private _c?: number[] | null
 	private _a?: number | null
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.HexColorValue)
 	}
 
-	public get r(): number {
-		if (this._r === undefined) {
+	public get channels(): number[] {
+		if (this._c === undefined) {
 			this.initColor()
 		}
-		return this._r!
-	}
-
-	public get g(): number {
-		if (this._g === undefined) {
-			this.initColor()
-		}
-		return this._g!
-	}
-
-	public get b(): number {
-		if (this._b === undefined) {
-			this.initColor()
-		}
-		return this._b!
+		return this._c!
 	}
 
 	public get a(): number {
@@ -433,27 +417,34 @@ export class HexColorValue extends Node {
 
 	private initColor() {
 		const value = this.text.slice(1)
+		let ch: number[] = []
 		if (value.length >= 6) {
 			const v = parseInt(value.slice(0, 6), 16)
-			this._r = ((v & 0xff0000) >> 16) / 255.0
-			this._g = ((v & 0x00ff00) >> 8) / 255.0
-			this._b = (v & 0x0000ff) / 255.0
+			ch[0] = ((v & 0xff0000) >> 16) / 255.0
+			ch[1] = ((v & 0x00ff00) >> 8) / 255.0
+			ch[2] = (v & 0x0000ff) / 255.0
+			this._c = ch
 			this._a = null
 			if (value.length === 8) {
 				this._a = parseInt(value.slice(6, 8), 16) / 255.0
 			}
 		} else {
 			const v = parseInt(value.slice(0, 3), 16)
-			let r = v & 0xf00
-			let g = v & 0x0f0
-			let b = v & 0x00f
-			this._r = ((r << 12) | (r << 8)) / 255.0
-			this._g = ((g << 8) | (g << 4)) / 255.0
-			this._b = ((b << 4) | b) / 255.0
+			ch[0] = v & 0xf00
+			ch[1] = v & 0x0f0
+			ch[2] = v & 0x00f
+			ch[0] = ((ch[0] << 12) | (ch[0] << 8)) / 255.0
+			ch[1] = ((ch[1] << 8) | (ch[1] << 4)) / 255.0
+			ch[2] = ((ch[2] << 4) | ch[2]) / 255.0
+			this._c = ch
 			this._a = null
 			if (value.length === 4) {
 				this._a = parseInt(value.slice(3, 4), 16) / 255.0
 			}
 		}
 	}
+}
+
+export function isHexColorValue(node?: Node): node is HexColorValue {
+	return node?.type === NodeType.HexColorValue
 }
