@@ -3,20 +3,26 @@ import * as ASCII from "./ascii"
 
 export enum NodeType {
 	Undefined,
-	Identifier,
-	Expression,
-	BinaryExpression,
-	Term,
-	Operator,
+	CssValue,
+
 	Value,
-	StringLiteral,
-	URILiteral,
-	Invocation,
+	Expression,
+
 	ColorFunction,
+	URILiteral,
 	Function,
-	FunctionArgument,
-	NumericValue,
+	Parentheses,
+
 	HexColorValue,
+	Operator,
+
+	Dimension,
+	NumericValue,
+
+	NamedColorValue,
+
+	StringLiteral,
+	Identifier,
 }
 
 export enum ReferenceType {
@@ -158,6 +164,24 @@ export class Nodelist extends Node {
 	}
 }
 
+export class CssValue extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.CssValue)
+	}
+}
+
+export class Value extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.Value)
+	}
+}
+
+export class Expression extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.Expression)
+	}
+}
+
 export class Identifier extends Node {
 	public referenceTypes?: ReferenceType[]
 	public isCustomProperty = false
@@ -173,106 +197,34 @@ export class StringLiteral extends Node {
 	}
 }
 
-export class Expression extends Node {
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.Expression)
-	}
-}
-
-export class BinaryExpression extends Node {
-	public left?: Node
-	public right?: Node
-	public operator?: Node
-
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.BinaryExpression)
-	}
-
-	public setLeft(left?: Node): left is Node {
-		return this.setNode(left, undefined, node => (this.left = node))
-	}
-
-	public getLeft(): Node | undefined {
-		return this.left
-	}
-
-	public setRight(right?: Node): right is Node {
-		return this.setNode(right, undefined, node => (this.right = node))
-	}
-
-	public getRight(): Node | undefined {
-		return this.right
-	}
-
-	public setOperator(value?: Node): value is Node {
-		return this.setNode(value, undefined, node => (this.operator = node))
-	}
-
-	public getOperator(): Node | undefined {
-		return this.operator
-	}
-}
-
 export class Operator extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Operator)
 	}
 }
 
-export class Term extends Node {
-	public operator?: Node
-	public expression?: Node
-
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.Term)
-	}
-
-	public setOperator(value?: Node): value is Node {
-		return this.setNode(value, undefined, node => (this.operator = node))
-	}
-
-	public getOperator(): Node | undefined {
-		return this.operator
-	}
-
-	public setExpression(value?: Node): value is Node {
-		return this.setNode(value, undefined, node => (this.expression = node))
-	}
-
-	public getExpression(): Node | undefined {
-		return this.expression
-	}
-}
-
-export class Invocation extends Node {
-	private arguments?: Nodelist
-
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.Invocation)
-	}
-
-	public getArguments(): Nodelist {
-		if (!this.arguments) {
-			this.arguments = new Nodelist(this)
-		}
-		return this.arguments
-	}
-}
-
-export class Function extends Invocation {
+export class Function extends Node {
 	public identifier?: Identifier
+	public arguments?: Value
 
 	constructor(start: number, end: number) {
-		super(start, end)
-	}
-
-	public get type(): NodeType {
-		return NodeType.Function
+		super(start, end, NodeType.Function)
 	}
 
 	public setIdentifier(node?: Identifier): node is Identifier {
 		return this.setNode(node, 0, node => {
 			this.identifier = node
+			this.updateRange(node)
+		})
+	}
+
+	public getArguments() {
+		return this.identifier
+	}
+
+	public setArguments(node?: Value): node is Value {
+		return this.setNode(node, 0, node => {
+			this.arguments = node
 			this.updateRange(node)
 		})
 	}
@@ -310,35 +262,6 @@ export class ColorFunction extends Function {
 
 	public getOpacity() {
 		return this.opacity
-	}
-}
-
-export class FunctionArgument extends Node {
-	public identifier?: Node
-	public value?: Node
-
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.FunctionArgument)
-	}
-
-	public setIdentifier(node?: Identifier): node is Identifier {
-		return this.setNode(node, 0, node => (this.identifier = node))
-	}
-
-	public getIdentifier(): Node | undefined {
-		return this.identifier
-	}
-
-	public getName(): string {
-		return this.identifier?.text ?? ""
-	}
-
-	public setValue(node?: Node): node is Node {
-		return this.setNode(node, 0, node => (this.value = node))
-	}
-
-	public getValue(): Node | undefined {
-		return this.value
 	}
 }
 

@@ -20,20 +20,25 @@ export enum TokenType {
 
 	UnicodeRange,
 
-	Comma,
-	Slash,
+	Hash,
+
 	ParenthesisL,
 	ParenthesisR,
 	BracketL,
 	BracketR,
-	Hash,
+	CurlyL,
+	CurlyR,
 
+	Comma,
+
+	Slash,
 	Delim,
-	Includes,
-	Dashmatch, // |=
-	SubstringOperator, // *=
-	PrefixOperator, // ^=
-	SuffixOperator, // $=
+	// Delim,
+	// Includes,
+	// Dashmatch, // |=
+	// SubstringOperator, // *=
+	// PrefixOperator, // ^=
+	// SuffixOperator, // $=
 }
 
 const staticTokenTable: Record<number, TokenType> = {}
@@ -42,6 +47,8 @@ staticTokenTable[ASCII.leftBracket] = TokenType.BracketL
 staticTokenTable[ASCII.rightBracket] = TokenType.BracketR
 staticTokenTable[ASCII.leftParenthesis] = TokenType.ParenthesisL
 staticTokenTable[ASCII.rightParenthesis] = TokenType.ParenthesisR
+staticTokenTable[ASCII.leftCurly] = TokenType.CurlyL
+staticTokenTable[ASCII.rightCurly] = TokenType.CurlyR
 staticTokenTable[ASCII.comma] = TokenType.Comma
 staticTokenTable[ASCII.slash] = TokenType.Slash
 
@@ -566,8 +573,8 @@ export class Scanner {
 			return this.finishToken(tokenType, offset, offset + 1)
 		}
 
-		// Delim
+		// any char
 		this.stream.nextChar()
-		return this.finishToken(TokenType.Delim, offset, offset)
+		return this.finishToken(TokenType.Delim, offset, this.stream.pos())
 	}
 }

@@ -130,12 +130,7 @@ export class Parser {
 		}
 	}
 
-	public parse<Node extends nodes.Node, ReturnValue extends Node | undefined>(
-		input: string,
-		parseFunc: () => ReturnValue,
-		stringProvider?: nodes.StringProvider,
-	): ReturnValue
-	public parse<T extends nodes.Node, U extends T>(
+	public parse<Node extends nodes.Node, U extends Node | undefined>(
 		input: string,
 		parseFunc: () => U,
 		stringProvider?: nodes.StringProvider,
@@ -155,106 +150,26 @@ export class Parser {
 
 	///////
 
-	public parseExpr(stopOnComma = false): nodes.Expression | undefined {
+	// public parseCssValue(): nodes.CssValue | undefined {
+	// 	// optional semicolon
+	// }
+
+	public parseValue(): nodes.Value | undefined {
+		const node = this.create(nodes.Value)
+
+		// children multiple expr, handle comma
+		// parseExpr()
+
+		return this.finish(node)
+	}
+
+	public parseExpr(): nodes.Expression | undefined {
 		const node = this.create(nodes.Expression)
 
-		if (!node.addChild(this.parseBinaryExpr())) {
-			return
-		}
-
-		while (true) {
-			if (this.peek(TokenType.Comma)) {
-				console.log("comma pos", this.scanner.pos())
-				if (stopOnComma) {
-					return this.finish(node)
-				}
-				this.consumeToken()
-			}
-			if (!node.addChild(this.parseBinaryExpr())) {
-				break
-			}
-		}
+		// children multiple terms, handle space
+		// parseTermExpression()
 
 		return this.finish(node)
-	}
-
-	public parseOperator(): nodes.Operator | undefined {
-		// these are operators for binary expressions
-		if (
-			this.peekDelim("/") ||
-			this.peekDelim("*") ||
-			this.peekDelim("+") ||
-			this.peekDelim("-") ||
-			this.peek(TokenType.Dashmatch) ||
-			this.peek(TokenType.Includes) ||
-			this.peek(TokenType.SubstringOperator) ||
-			this.peek(TokenType.PrefixOperator) ||
-			this.peek(TokenType.SuffixOperator) ||
-			this.peekDelim("=")
-		) {
-			const node = this.create(nodes.Operator)
-			this.consumeToken()
-			return this.finish(node)
-		}
-	}
-
-	public parseUnaryOperator(): nodes.Node | undefined {
-		if (!this.peekDelim("+") && !this.peekDelim("-")) {
-			return
-		}
-		const node = this.create(nodes.Node)
-		this.consumeToken()
-		return this.finish(node)
-	}
-
-	public parseBinaryExpr(
-		preparsedLeft?: nodes.BinaryExpression,
-		preparsedOper?: nodes.Node,
-	): nodes.BinaryExpression | undefined {
-		let node = this.create(nodes.BinaryExpression)
-
-		if (!node.setLeft(preparsedLeft || this.parseTerm())) {
-			return
-		}
-
-		if (!node.setOperator(preparsedOper || this.parseOperator())) {
-			return this.finish(node)
-		}
-
-		if (!node.setRight(this.parseTerm())) {
-			return this.finish(node, ParseError.TermExpected)
-		}
-
-		// things needed for multiple binary expressions
-		node = this.finish(node)
-		const operator = this.parseOperator()
-		if (operator) {
-			node = this.parseBinaryExpr(node, operator) as nodes.BinaryExpression
-		}
-
-		return this.finish(node)
-	}
-
-	public parseTerm(): nodes.Term | undefined {
-		let node = this.create(nodes.Term)
-
-		node.setOperator(this.parseUnaryOperator()) // optional
-
-		if (node.setExpression(this.parseTermExpression())) {
-			return this.finish(node)
-		}
-	}
-
-	private debugToken(t: Token) {
-		return t.getText(this.scanner.source)
-	}
-
-	private debugCurrent() {
-		return '"' + this.token.getText(this.scanner.source) + '"'
-	}
-
-	private debugPrev() {
-		return '"' + this.prevToken?.getText(this.scanner.source) + '"'
 	}
 
 	public parseTermExpression(): nodes.Node | undefined {
@@ -271,12 +186,33 @@ export class Parser {
 		)
 	}
 
-	public parseFunctionArgument(stopOnComma = false): nodes.Node | undefined {
-		const node = this.create(nodes.FunctionArgument)
-
-		if (node.setValue(this.parseExpr(stopOnComma))) {
+	public parseOperator(): nodes.Operator | undefined {
+		if (this.peek(TokenType.Delim) || this.peek(TokenType.Slash)) {
+			const node = this.create(nodes.Operator)
+			this.consumeToken()
 			return this.finish(node)
 		}
+	}
+
+	public parseUnaryOperator(): nodes.Node | undefined {
+		if (!this.peekDelim("+") && !this.peekDelim("-")) {
+			return
+		}
+		const node = this.create(nodes.Node)
+		this.consumeToken()
+		return this.finish(node)
+	}
+
+	private debugToken(t: Token) {
+		return t.getText(this.scanner.source)
+	}
+
+	private debugCurrent() {
+		return '"' + this.token.getText(this.scanner.source) + '"'
+	}
+
+	private debugPrev() {
+		return '"' + this.prevToken?.getText(this.scanner.source) + '"'
 	}
 
 	public parseFunction(): nodes.Function | undefined {
