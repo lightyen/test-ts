@@ -183,19 +183,11 @@ export class Parser {
 			this.parseParentheses() ||
 			this.parseIdentifier() ||
 			this.parseStringLiteral() ||
+			this.parseHexColor() ||
 			this.parseNumeric() ||
-			// this._parseHexColor() ||
-			this.parseOperator()
+			this.parseDelim()
 			// this._parseNamedLine()
 		)
-	}
-
-	public parseOperator(): nodes.Operator | undefined {
-		if (this.peek(TokenType.Delim) || this.peek(TokenType.Slash)) {
-			const node = this.create(nodes.Operator)
-			this.consumeToken()
-			return this.finish(node)
-		}
 	}
 
 	public parseUnaryOperator(): nodes.Node | undefined {
@@ -293,13 +285,37 @@ export class Parser {
 		return this.finish(node)
 	}
 
-	public parseNumeric(): nodes.NumericValue | undefined {
-		if (this.peek(TokenType.Num) || this.peek(TokenType.Percentage) || this.peek(TokenType.Dimension)) {
-			const node = this.create(nodes.NumericValue)
+	public parseHexColor(): nodes.Node | undefined {
+		if (this.peekRegExp(TokenType.Hash, /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/g)) {
+			const node = this.create(nodes.HexColorValue)
 			this.consumeToken()
-			return <nodes.NumericValue>this.finish(node)
+			return this.finish(node)
+		}
+	}
+
+	public parseNumeric(): nodes.NumericValue | undefined {
+		let tokenType: TokenType
+		if (this.peek(TokenType.Percentage)) {
+			tokenType = TokenType.Percentage
+		} else if (this.peek(TokenType.Dimension)) {
+			tokenType = TokenType.Dimension
+		} else if (this.peek(TokenType.Num)) {
+			tokenType = TokenType.Num
+		} else {
+			return
 		}
 
-		return
+		const node = this.create(nodes.NumericValue)
+		// node.setTokenType(tokenType)
+		this.consumeToken()
+		return this.finish(node)
+	}
+
+	public parseDelim(): nodes.Delim | undefined {
+		if (this.peek(TokenType.Delim) || this.peek(TokenType.Slash)) {
+			const node = this.create(nodes.Delim)
+			this.consumeToken()
+			return this.finish(node)
+		}
 	}
 }

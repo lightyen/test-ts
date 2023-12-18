@@ -1,6 +1,6 @@
 import { Marker } from "./errors"
 import * as ASCII from "./ascii"
-import { TokenType } from "./scanner"
+import { Token, TokenType } from "./scanner"
 
 export enum NodeType {
 	Undefined,
@@ -15,7 +15,7 @@ export enum NodeType {
 	Parentheses,
 
 	HexColorValue,
-	Operator,
+	Delim,
 
 	Dimension,
 	NumericValue,
@@ -191,9 +191,9 @@ export class StringLiteral extends Node {
 	}
 }
 
-export class Operator extends Node {
+export class Delim extends Node {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.Operator)
+		super(start, end, NodeType.Delim)
 	}
 }
 
@@ -254,7 +254,10 @@ export class Function extends Node {
 }
 
 export class ColorFunction extends Function {
-	public opacity?: Node
+	private _r?: number | null
+	private _g?: number | null
+	private _b?: number | null
+	private _a?: number | null
 
 	static test(node?: Node): node is ColorFunction {
 		return node?.type === NodeType.ColorFunction
@@ -268,15 +271,87 @@ export class ColorFunction extends Function {
 		return NodeType.ColorFunction
 	}
 
-	public setOpacity(node?: Node): node is Node {
-		return this.setNode(node, 0, node => {
-			this.opacity = node
-			this.updateRange(node)
-		})
+	public get r(): number {
+		if (this._r === undefined) {
+			this.initColor()
+		}
+		return this._r!
 	}
 
-	public getOpacity() {
-		return this.opacity
+	public get g(): number {
+		if (this._g === undefined) {
+			this.initColor()
+		}
+		return this._g!
+	}
+
+	public get b(): number {
+		if (this._b === undefined) {
+			this.initColor()
+		}
+		return this._b!
+	}
+
+	public get a(): number {
+		if (this._a === undefined) {
+			this.initColor()
+		}
+		return this._a!
+	}
+
+	private initColor() {
+		const expresions = this.getArguments()?.getChildren()
+		if (!expresions || expresions.length === 0) {
+			return
+		}
+
+		let rgb: number[] = []
+
+		const legacy = expresions.length > 1
+		if (legacy) {
+			for (let i = 0; i < 3; i++) {
+				const node = expresions[i].getChildren()[0]
+				if (isNumericValue(node)) {
+					const { value, unit } = node.getValue()
+					if (unit == null) {
+						rgb[i] = parseFloat(value) / 255.0
+					} else if (unit === "%") {
+						rgb[i] = parseFloat(value) / 100.0
+					}
+				} else {
+					rgb[i] = 0
+				}
+			}
+
+			this._r = rgb[0]
+			this._g = rgb[1]
+			this._b = rgb[2]
+			this._a = null
+
+			if (expresions[3]) {
+				const node = expresions[3].getChildren()[0]
+				if (isNumericValue(node)) {
+					const { value, unit } = node.getValue()
+					this._a = parseFloat(value)
+					if (unit === "%") {
+						this._a = this._a / 100.0
+					}
+				}
+			}
+
+			return
+		}
+
+		const fnName = this.getName()
+		const terms = expresions[0].getChildren()
+
+		for (let i = 0; i < terms.length; i++) {
+			rgb.push(terms[i]?.text || "")
+		}
+
+		if (terms.length < 3) {
+			return
+		}
 	}
 }
 
@@ -304,8 +379,71 @@ export class NumericValue extends Node {
 	}
 }
 
+export function isNumericValue(node: Node): node is NumericValue {
+	return node.type === NodeType.NumericValue
+}
+
 export class HexColorValue extends Node {
+	private _r?: number | null
+	private _g?: number | null
+	private _b?: number | null
+	private _a?: number | null
+
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.HexColorValue)
+	}
+
+	public get r(): number {
+		if (this._r === undefined) {
+			this.initColor()
+		}
+		return this._r!
+	}
+
+	public get g(): number {
+		if (this._g === undefined) {
+			this.initColor()
+		}
+		return this._g!
+	}
+
+	public get b(): number {
+		if (this._b === undefined) {
+			this.initColor()
+		}
+		return this._b!
+	}
+
+	public get a(): number {
+		if (this._a === undefined) {
+			this.initColor()
+		}
+		return this._a!
+	}
+
+	private initColor() {
+		const value = this.text.slice(1)
+		if (value.length >= 6) {
+			const v = parseInt(value.slice(0, 6), 16)
+			this._r = ((v & 0xff0000) >> 16) / 255.0
+			this._g = ((v & 0x00ff00) >> 8) / 255.0
+			this._b = (v & 0x0000ff) / 255.0
+			this._a = null
+			if (value.length === 8) {
+				this._a = parseInt(value.slice(6, 8), 16) / 255.0
+			}
+		} else {
+			const v = parseInt(value.slice(0, 3), 16)
+			let r = v & 0xf00
+			let g = v & 0x0f0
+			let b = v & 0x00f
+			this._r = ((r << 12) | (r << 8)) / 255.0
+			this._g = ((g << 8) | (g << 4)) / 255.0
+			this._b = ((b << 4) | b) / 255.0
+			this._a = null
+			if (value.length === 4) {
+				this._a = parseInt(value.slice(3, 4), 16) / 255.0
+			}
+		}
 	}
 }

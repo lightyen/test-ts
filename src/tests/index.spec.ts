@@ -3,7 +3,8 @@ import { Parser } from "../parser/parser"
 import { Scanner } from "../parser/scanner"
 
 test("parser", () => {
-	const source = "hsl(160 42 30% / .3 )"
+	// const source = "hsl(160 42 30% / .3 )"
+	const source = "rgb(32 ,18%,55, 12%)"
 	const p = new Parser(new Scanner(source))
 	const n = p.parse(source, p.parseValue, (start, end) => source.slice(start, end))
 	if (n?.children) {
@@ -14,10 +15,10 @@ test("parser", () => {
 						const fnName = term.getName()
 						console.log("fnName =", fnName)
 
-						const args = term.getArguments()
-						if (args) {
-							console.log(args.typeText, args.start, args.end, args.text)
-						}
+						console.log(term.r)
+						console.log(term.g)
+						console.log(term.b)
+						console.log(term.a)
 					}
 				}
 			}

@@ -1,13 +1,3 @@
-
-
-<Expr> := <BinaryExpr> [, <BinaryExpr>]
-<BinaryExpr> := <Term> [<op> <Term>]
-
-<TermExpr> := <ident> | <uri> | <function> | ...
-<FunctionArguments> := <Expr>
-
-///
-
 <css-value> := <value> ;?
 
 <value> := <expr> [, <expr>]

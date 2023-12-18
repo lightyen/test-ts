@@ -33,12 +33,8 @@ export enum TokenType {
 
 	Slash,
 	Delim,
-	// Delim,
-	// Includes,
-	// Dashmatch, // |=
-	// SubstringOperator, // *=
-	// PrefixOperator, // ^=
-	// SuffixOperator, // $=
+
+	Undefined,
 }
 
 const staticTokenTable: Record<number, TokenType> = {}
