@@ -2,6 +2,7 @@ import { Scanner, Token, TokenType } from "./scanner"
 import * as nodes from "./nodes"
 import { CSSIssueType, Level, Marker, ParseError } from "./errors"
 import * as ASCII from "./ascii"
+import { colorKeywords, colorNames } from "./colorNames"
 
 const colorFunctions = new Set(["rgb", "rgba", "hsl", "hsla", "hwb", "lch", "lab", "oklab", "oklch", "color"])
 
@@ -182,6 +183,8 @@ export class Parser {
 			// this._parseUnicodeRange() ||
 			this.parseFunction() ||
 			this.parseParentheses() ||
+			this.parseNamedColor() ||
+			this.parseKeywordColor() ||
 			this.parseIdentifier() ||
 			this.parseStringLiteral() ||
 			this.parseHexColor() ||
@@ -266,12 +269,43 @@ export class Parser {
 		return this.finish(node)
 	}
 
+	public parseNamedColor(): nodes.NamedColorValue | undefined {
+		if (!this.peek(TokenType.Identifier)) {
+			return
+		}
+
+		const word = this.token.getText(this.scanner.source)
+
+		if (colorNames[word]) {
+			const node = this.create(nodes.NamedColorValue)
+			this.consumeToken()
+			return this.finish(node)
+		}
+	}
+
+	public parseKeywordColor(): nodes.KeywordColorValue | undefined {
+		if (!this.peek(TokenType.Identifier)) {
+			return
+		}
+
+		const word = this.token.getText(this.scanner.source)
+
+		if (colorKeywords.indexOf(word) !== -1) {
+			const node = this.create(nodes.KeywordColorValue)
+			this.consumeToken()
+			return this.finish(node)
+		}
+	}
+
 	public parseIdentifier(): nodes.Identifier | undefined {
 		if (!this.peek(TokenType.Identifier)) {
 			return
 		}
+
+		const word = this.token.getText(this.scanner.source)
+
 		const node = this.create(nodes.Identifier)
-		node.isCustomProperty = this.peekRegExp(TokenType.Identifier, /^--/)
+		node.isCustomProperty = word.startsWith("--")
 		this.consumeToken()
 		return this.finish(node)
 	}

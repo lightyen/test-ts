@@ -1,6 +1,6 @@
 import { Marker } from "./errors"
 import * as ASCII from "./ascii"
-import { Token, TokenType } from "./scanner"
+import { namedColors } from "./colorNames"
 
 export enum NodeType {
 	Undefined,
@@ -21,6 +21,7 @@ export enum NodeType {
 	NumericValue,
 
 	NamedColorValue,
+	KeywordColorValue,
 
 	StringLiteral,
 	Identifier,
@@ -447,4 +448,47 @@ export class HexColorValue extends Node {
 
 export function isHexColorValue(node?: Node): node is HexColorValue {
 	return node?.type === NodeType.HexColorValue
+}
+
+export class NamedColorValue extends Node {
+	private _c?: number[] | null
+	private _a?: number | null
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.NamedColorValue)
+	}
+
+	public get channels(): number[] {
+		if (this._c === undefined) {
+			this.initColor()
+		}
+		return this._c!
+	}
+
+	public get a(): number {
+		if (this._a === undefined) {
+			this.initColor()
+		}
+		return this._a!
+	}
+
+	private initColor() {
+		const name = this.text
+		this._c = namedColors[name]
+		this._a = null
+	}
+}
+
+export function isNamedColorValue(node?: Node): node is NamedColorValue {
+	return node?.type === NodeType.NamedColorValue
+}
+
+export class KeywordColorValue extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.KeywordColorValue)
+	}
+}
+
+export function isKeywordColorValue(node?: Node): node is KeywordColorValue {
+	return node?.type === NodeType.KeywordColorValue
 }
