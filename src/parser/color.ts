@@ -162,3 +162,35 @@ for (const name in colorNames) {
 	ch[2] = (v & 0x0000ff) / 255.0
 	namedColors[name] = ch
 }
+
+/**
+ * @param h [0 - 360]
+ * @param s [0 - 1]
+ * @param l [0 - 1]
+ */
+export function hsl2color(h: number, s: number, l: number): [r: number, g: number, b: number] {
+	h = (h + 360) % 360
+	const c = (1 - Math.abs(2 * l - 1)) * s
+	const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+	const m = l - c / 2
+	let ret: [r: number, g: number, b: number]
+	if (h < 60) {
+		ret = [c + m, x + m, m]
+	} else if (h < 120) {
+		ret = [x + m, c + m, m]
+	} else if (h < 180) {
+		ret = [m, c + m, x + m]
+	} else if (h < 240) {
+		ret = [m, x + m, c + m]
+	} else if (h < 300) {
+		ret = [x + m, m, c + m]
+	} else {
+		ret = [c + m, m, x + m]
+	}
+	return ret
+}
+
+export function round(num: number, p = 0): number {
+	const b = 10 ** p
+	return Math.round((num + Number.EPSILON) * b) / b
+}

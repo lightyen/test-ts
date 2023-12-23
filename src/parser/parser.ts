@@ -1,8 +1,7 @@
 import { Scanner, Token, TokenType } from "./scanner"
 import * as nodes from "./nodes"
 import { CSSIssueType, Level, Marker, ParseError } from "./errors"
-import * as ASCII from "./ascii"
-import { colorKeywords, colorNames } from "./colorNames"
+import { colorKeywords, colorNames } from "./color"
 
 const colorFunctions = new Set(["rgb", "rgba", "hsl", "hsla", "hwb", "lch", "lab", "oklab", "oklch", "color"])
 

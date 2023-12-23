@@ -1,6 +1,6 @@
 import { Marker } from "./errors"
 import * as ASCII from "./ascii"
-import { namedColors } from "./colorNames"
+import { namedColors, hsl2color } from "./color"
 
 export enum NodeType {
 	Undefined,
@@ -257,6 +257,8 @@ export class Function extends Node {
 export class ColorFunction extends Function {
 	private _c?: number[] | null
 	private _a?: number | null
+	private _name?: string | null
+	private _space?: string | null
 
 	constructor(start: number, end: number) {
 		super(start, end)
@@ -280,9 +282,27 @@ export class ColorFunction extends Function {
 		return this._a!
 	}
 
+	public get name(): string {
+		if (this._name === undefined) {
+			this.initColor()
+		}
+		return this._name!
+	}
+
+	public get space(): string {
+		if (this._space === undefined) {
+			this.initColor()
+		}
+		return this._space!
+	}
+
 	private initColor() {
 		const expresions = this.getArguments()?.getChildren()
 		if (!expresions || expresions.length === 0) {
+			this._a = 0
+			this._c = [0, 0, 0]
+			this._name = null
+			this._space = null
 			return
 		}
 
@@ -297,20 +317,26 @@ export class ColorFunction extends Function {
 				if (isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					if (unit == null) {
-						if (fnName.startsWith("rgb")) {
-							// TODO: hsl
-							ch[i] = parseFloat(value) / 255.0
-						} else {
-							ch[i] = parseFloat(value)
-						}
+						ch[i] = parseFloat(value)
 					} else if (unit === "%") {
 						ch[i] = parseFloat(value) / 100.0
 					}
 				}
 			}
 
+			if (fnName.slice(0, 3) === "rgb") {
+				ch = ch.map(v => v / 255.0)
+				this._name = fnName.slice(0, 3)
+			} else if (fnName.slice(0, 3) === "hsl") {
+				ch = hsl2color(ch[0], ch[1], ch[2])
+				this._name = fnName.slice(0, 3)
+			} else {
+				this._name = fnName
+			}
+
 			this._c = ch
 			this._a = null
+			this._space = null
 
 			if (expresions[3]) {
 				const node = expresions[3].getChildren()[0]
@@ -328,7 +354,10 @@ export class ColorFunction extends Function {
 
 		let terms = expresions[0].getChildren()
 		if (fnName === "color") {
+			this._space = terms[0]?.text.toLowerCase() ?? null
 			terms = terms.slice(1)
+		} else {
+			this._space = null
 		}
 
 		for (let i = 0; i < 3; i++) {
@@ -337,15 +366,21 @@ export class ColorFunction extends Function {
 			if (isNumericValue(node)) {
 				const { value, unit } = node.getValue()
 				if (unit == null) {
-					if (fnName.startsWith("rgb")) {
-						ch[i] = parseFloat(value) / 255.0
-					} else {
-						ch[i] = parseFloat(value)
-					}
+					ch[i] = parseFloat(value)
 				} else if (unit === "%") {
 					ch[i] = parseFloat(value) / 100.0
 				}
 			}
+		}
+
+		if (fnName.slice(0, 3) === "rgb") {
+			ch = ch.map(v => v / 255.0)
+			this._name = fnName.slice(0, 3)
+		} else if (fnName.slice(0, 3) === "hsl") {
+			ch = hsl2color(ch[0], ch[1], ch[2])
+			this._name = fnName.slice(0, 3)
+		} else {
+			this._name = fnName
 		}
 
 		this._c = ch
