@@ -155,6 +155,10 @@ export class Parser {
 	// 	// optional semicolon
 	// }
 
+	public parseTwExpression(): nodes.TwExpr | undefined {
+		return undefined
+	}
+
 	public parseValue(): nodes.Value | undefined {
 		const node = this.create(nodes.Value)
 

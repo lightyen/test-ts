@@ -25,6 +25,22 @@ export enum NodeType {
 
 	StringLiteral,
 	Identifier,
+
+	TwProgram,
+	TwExpr,
+	TwGroup,
+	TwGroupVariant,
+	TwVariantSpan,
+
+	SimpleVariant,
+	ArbitraryVariant,
+	AnyVariant,
+
+	TwDeclaration,
+	ArbitraryDeclaration,
+	AnyDeclaration,
+
+	Modifier,
 }
 
 export interface StringProvider {
@@ -526,4 +542,18 @@ export class KeywordColorValue extends Node {
 
 export function isKeywordColorValue(node?: Node): node is KeywordColorValue {
 	return node?.type === NodeType.KeywordColorValue
+}
+
+/// tw
+
+export class TwProgram extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwProgram)
+	}
+}
+
+export class TwExpr extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwExpr)
+	}
 }
