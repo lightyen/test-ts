@@ -4,9 +4,8 @@ import { namedColors, hsl2color } from "./color"
 
 export enum NodeType {
 	Undefined,
-	CssValue,
 
-	Value,
+	CssValue,
 	Expression,
 
 	ColorFunction,
@@ -27,20 +26,20 @@ export enum NodeType {
 	Identifier,
 
 	TwProgram,
-	TwExpr,
-	TwGroup,
+	TwExpression,
 	TwGroupVariant,
+	TwGroup,
 	TwVariantSpan,
 
-	SimpleVariant,
-	ArbitraryVariant,
-	AnyVariant,
+	TwPlainVariant,
+	TwArbitraryVariant,
+	TwAnyVariant,
 
-	TwDeclaration,
-	ArbitraryDeclaration,
-	AnyDeclaration,
+	TwPlainDeclaration,
+	TwArbitraryDeclaration,
+	TwAnyDeclaration,
 
-	Modifier,
+	TwModifier,
 }
 
 export interface StringProvider {
@@ -57,8 +56,8 @@ export class Node {
 	public end: number
 	public source: string
 	public parent?: Node
-	public children: Node[] | undefined
-	public issues: Marker[] | undefined
+	public children?: Node[]
+	public issues?: Marker[]
 	public stringProvider: StringProvider | undefined
 
 	constructor(start = -1, end = -1, nodeType?: NodeType) {
@@ -182,12 +181,6 @@ export class CssValue extends Node {
 	}
 }
 
-export class Value extends Node {
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.Value)
-	}
-}
-
 export class Expression extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Expression)
@@ -215,7 +208,7 @@ export class Delim extends Node {
 }
 
 export class Parentheses extends Node {
-	public arguments?: Value
+	public arguments?: CssValue
 	public bracket: [number, number]
 
 	constructor(start: number, end: number) {
@@ -223,11 +216,11 @@ export class Parentheses extends Node {
 		this.bracket = [ASCII.leftParenthesis, ASCII.rightParenthesis]
 	}
 
-	public getArguments(): Value | undefined {
+	public getArguments(): CssValue | undefined {
 		return this.arguments
 	}
 
-	public setArguments(node?: Value): node is Value {
+	public setArguments(node?: CssValue): node is CssValue {
 		return this.setNode(node, 0, node => {
 			this.arguments = node
 			this.updateRange(node)
@@ -237,7 +230,7 @@ export class Parentheses extends Node {
 
 export class Function extends Node {
 	public identifier?: Identifier
-	public arguments?: Value
+	public arguments?: CssValue
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Function)
@@ -250,11 +243,11 @@ export class Function extends Node {
 		})
 	}
 
-	public getArguments(): Value | undefined {
+	public getArguments(): CssValue | undefined {
 		return this.arguments
 	}
 
-	public setArguments(node?: Value): node is Value {
+	public setArguments(node?: CssValue): node is CssValue {
 		return this.setNode(node, 0, node => {
 			this.arguments = node
 			this.updateRange(node)
@@ -552,8 +545,8 @@ export class TwProgram extends Node {
 	}
 }
 
-export class TwExpr extends Node {
+export class TwExpression extends Node {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwExpr)
+		super(start, end, NodeType.TwExpression)
 	}
 }

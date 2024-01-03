@@ -151,37 +151,40 @@ export class Parser {
 
 	///////
 
-	// public parseCssValue(): nodes.CssValue | undefined {
-	// 	// optional semicolon
-	// }
-
-	public parseTwExpression(): nodes.TwExpr | undefined {
-		return undefined
+	public parseTwProgram(): nodes.TwProgram | undefined {
+		const node = this.create(nodes.TwProgram)
+		while (node.addChild(this.parseTwExpr())) {}
+		return this.finish(node)
 	}
 
-	public parseValue(): nodes.Value | undefined {
-		const node = this.create(nodes.Value)
+	public parseTwExpr(): nodes.TwExpression | undefined {
+		const node = this.create(nodes.TwExpression)
+		while (node.addChild(this.parseTwTermExpr())) {}
+		return this.finish(node)
+	}
 
+	public parseTwTermExpr(): nodes.Node | undefined {
+		return this.parseTwFunction() || this.parseTwParentheses()
+	}
+
+	public parseCssValue(): nodes.CssValue | undefined {
+		const node = this.create(nodes.CssValue)
 		node.addChild(this.parseExpr())
-
 		while (this.accept(TokenType.Comma)) {
 			if (!node.addChild(this.parseExpr())) {
 				break
 			}
 		}
-
 		return this.finish(node)
 	}
 
 	public parseExpr(): nodes.Expression | undefined {
 		const node = this.create(nodes.Expression)
-
-		while (node.addChild(this.parseTermExpression())) {}
-
+		while (node.addChild(this.parseTermExpr())) {}
 		return this.finish(node)
 	}
 
-	public parseTermExpression(): nodes.Node | undefined {
+	public parseTermExpr(): nodes.Node | undefined {
 		return (
 			// this._parseUnicodeRange() ||
 			this.parseFunction() ||
@@ -236,7 +239,7 @@ export class Parser {
 		if (colorFunctions.has(fnName.toLowerCase())) {
 			const cNode = this.create(nodes.ColorFunction)
 			cNode.setIdentifier(node.getIdentifier())
-			cNode.setArguments(this.parseValue())
+			cNode.setArguments(this.parseCssValue())
 
 			if (!this.accept(TokenType.ParenthesisR)) {
 				return this.finish(cNode, ParseError.RightParenthesisExpected)
@@ -248,7 +251,7 @@ export class Parser {
 			// TODO:
 		}
 
-		node.setArguments(this.parseValue())
+		node.setArguments(this.parseCssValue())
 
 		if (!this.accept(TokenType.ParenthesisR)) {
 			return this.finish(node, ParseError.RightParenthesisExpected)
@@ -263,7 +266,7 @@ export class Parser {
 			return
 		}
 
-		node.setArguments(this.parseValue())
+		node.setArguments(this.parseCssValue())
 
 		if (!this.accept(TokenType.ParenthesisR)) {
 			return this.finish(node, ParseError.RightParenthesisExpected)

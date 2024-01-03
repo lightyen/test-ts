@@ -11,7 +11,7 @@ import { Scanner } from "../parser/scanner"
 test("parser", () => {
 	const source = "hsl(160 42% 30% 123 / .3 ), 重新 , #33333366 ,color(rec2020 1 1 1/ 4), chocolate transparent"
 	const p = new Parser(new Scanner(source))
-	const n = p.parse(source, p.parseValue, (start, end) => source.slice(start, end))
+	const n = p.parse(source, p.parseCssValue, (start, end) => source.slice(start, end))
 	for (const c of n?.getChildren() ?? []) {
 		let isColor = false
 		for (const node of c?.getChildren() ?? []) {
@@ -36,7 +36,7 @@ test("parser", () => {
 test("tw", () => {
 	const source = "test-sd -px-0.3 text-[color(srgb 1 1 1)]"
 	const p = new Parser(new Scanner(source))
-	const n = p.parse(source, p.parseValue, (start, end) => source.slice(start, end))
+	const n = p.parse(source, p.parseCssValue, (start, end) => source.slice(start, end))
 	for (const c of n?.getChildren() ?? []) {
 		console.log(`node ${c.typeText}: [${c.start} ${c.end}]`, c.text)
 		console.log(c.getChildren())

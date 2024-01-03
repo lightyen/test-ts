@@ -329,6 +329,7 @@ export class Scanner {
 		return false
 	}
 
+	/** [_a-zA-Z0-9] */
 	private identFirstChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		if (
@@ -345,6 +346,7 @@ export class Scanner {
 		return false
 	}
 
+	/** [-_a-zA-Z0-9] */
 	private identChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		if (
@@ -437,7 +439,7 @@ export class Scanner {
 		const hasMinus = this.minus()
 		let result: ConsumeResult = false
 		if (hasMinus) {
-			if ((result = this.minus() || this.identFirstChar() || this.escape())) {
+			if ((result = this.minus() /* -- */ || this.identFirstChar() || this.escape())) {
 				for (let m = this.identChar() || this.escape(); m; m = this.identChar() || this.escape()) {
 					result = m
 				}
