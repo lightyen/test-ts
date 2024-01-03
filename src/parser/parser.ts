@@ -1,6 +1,6 @@
 import { Scanner, Token, TokenType } from "./scanner"
 import * as nodes from "./nodes"
-import { CSSIssueType, Level, Marker, ParseError } from "./errors"
+import { IssueType, Level, Marker, ParseError } from "./errors"
 import { colorKeywords, colorNames } from "./color"
 
 const colorFunctions = new Set(["rgb", "rgba", "hsl", "hsla", "hwb", "lch", "lab", "oklab", "oklch", "color"])
@@ -96,7 +96,7 @@ export class Parser {
 
 	public finish<T extends nodes.Node>(
 		node: T,
-		error?: CSSIssueType,
+		error?: IssueType,
 		resyncTokens?: TokenType[],
 		resyncStopTokens?: TokenType[],
 	): T {
@@ -117,7 +117,7 @@ export class Parser {
 
 	public markError<T extends nodes.Node>(
 		node: T,
-		error: CSSIssueType,
+		error: IssueType,
 		resyncTokens?: TokenType[],
 		resyncStopTokens?: TokenType[],
 	): void {
@@ -165,6 +165,45 @@ export class Parser {
 
 	public parseTwTermExpr(): nodes.Node | undefined {
 		return this.parseTwFunction() || this.parseTwParentheses()
+	}
+
+	// xxx/yyy/zzz/modifier
+	// [!]<ident>[!]
+	// <ident>[]
+	// <ident>[]/<modifier>
+	private parseTwDecl(): nodes.TwDeclaration | undefined {
+		const pos = this.mark()
+		const node = this.create(nodes.TwDeclaration)
+
+		node.important = this.accept(TokenType.Bang)
+
+		if (!node.setIdentifier(this.parseIdentifier())) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		if (!this.accept(TokenType.BracketL)) {
+			return
+		}
+
+		node.setArguments(this.parseCssValue())
+
+		if (!this.accept(TokenType.BracketR)) {
+			return this.finish(node, ParseError.RightBracketExpected)
+		}
+
+		if (!this.hasWhitespace() && this.accept(TokenType.Slash)) {
+			node.setModifier(this.parseTwModifier())
+		}
+
+		node.important = this.accept(TokenType.Bang)
+
+		return this.finish(node)
+	}
+
+	// [string]
+	private parseTwModifier(): nodes.TwModifier | undefined {
+		return undefined
 	}
 
 	public parseCssValue(): nodes.CssValue | undefined {

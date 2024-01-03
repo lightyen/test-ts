@@ -30,6 +30,8 @@ export enum TokenType {
 	CurlyR,
 
 	Comma,
+	Colon,
+	Bang,
 
 	Slash,
 	Delim,
@@ -39,6 +41,7 @@ export enum TokenType {
 
 const staticTokenTable: Record<number, TokenType> = {}
 staticTokenTable[ASCII.semicolon] = TokenType.SemiColon
+staticTokenTable[ASCII.colon] = TokenType.Colon
 staticTokenTable[ASCII.leftBracket] = TokenType.BracketL
 staticTokenTable[ASCII.rightBracket] = TokenType.BracketR
 staticTokenTable[ASCII.leftParenthesis] = TokenType.ParenthesisL
@@ -47,6 +50,7 @@ staticTokenTable[ASCII.leftCurly] = TokenType.CurlyL
 staticTokenTable[ASCII.rightCurly] = TokenType.CurlyR
 staticTokenTable[ASCII.comma] = TokenType.Comma
 staticTokenTable[ASCII.slash] = TokenType.Slash
+staticTokenTable[ASCII.bang] = TokenType.Bang
 
 // https://developer.mozilla.org/en-US/docs/Web/CSS/length
 const staticUnitTable: Record<string, TokenType> = {}
@@ -112,6 +116,19 @@ staticUnitTable["fr"] = TokenType.Percentage
 // 	end: number
 // 	typeStr(): string
 // }
+
+export function isTwChar(ch: number): boolean {
+	if (
+		ch === ASCII.underscore || // _
+		(ch >= ASCII._a && ch <= ASCII._z) || // a-z
+		(ch >= ASCII._A && ch <= ASCII._Z) || // A-Z
+		(ch >= ASCII._0 && ch <= ASCII._9) || // 0-9
+		(ch >= 0x80 && ch <= 0xffff)
+	) {
+		return true
+	}
+	return false
+}
 
 export class Token {
 	constructor(
@@ -354,7 +371,7 @@ export class Scanner {
 			ch === ASCII.hyphen || // -
 			(ch >= ASCII._a && ch <= ASCII._z) || // a-z
 			(ch >= ASCII._A && ch <= ASCII._Z) || // A-Z
-			(ch >= ASCII._0 && ch <= ASCII._9) || // 0/9
+			(ch >= ASCII._0 && ch <= ASCII._9) || // 0-9
 			(ch >= 0x80 && ch <= 0xffff)
 		) {
 			// nonascii

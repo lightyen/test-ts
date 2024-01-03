@@ -31,13 +31,12 @@ export enum NodeType {
 	TwGroup,
 	TwVariantSpan,
 
-	TwPlainVariant,
+	TwStaticVariant,
 	TwArbitraryVariant,
-	TwAnyVariant,
+	TwRawVariant,
 
-	TwPlainDeclaration,
-	TwArbitraryDeclaration,
-	TwAnyDeclaration,
+	TwDeclaration,
+	TwRawDeclaration,
 
 	TwModifier,
 }
@@ -548,5 +547,50 @@ export class TwProgram extends Node {
 export class TwExpression extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwExpression)
+	}
+}
+
+export class TwModifier extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwModifier)
+	}
+}
+
+export class TwDeclaration extends Node {
+	public important = false
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwDeclaration)
+	}
+
+	public identifier?: Identifier
+
+	public setIdentifier(node?: Identifier): node is Identifier {
+		return this.setNode(node, 0, node => {
+			this.identifier = node
+			this.updateRange(node)
+		})
+	}
+
+	public arguments?: CssValue
+
+	public getArguments(): CssValue | undefined {
+		return this.arguments
+	}
+
+	public setArguments(node?: CssValue): node is CssValue {
+		return this.setNode(node, 0, node => {
+			this.arguments = node
+			this.updateRange(node)
+		})
+	}
+
+	public modifier?: TwModifier
+
+	public setModifier(node?: TwModifier): node is TwModifier {
+		return this.setNode(node, 0, node => {
+			this.modifier = node
+			this.updateRange(node)
+		})
 	}
 }

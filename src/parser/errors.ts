@@ -59,7 +59,7 @@ export class Marker implements IMarker {
 	}
 }
 
-export class CSSIssueType implements Rule {
+export class IssueType implements Rule {
 	id: string
 	message: string
 	constructor(id: string, message: string) {
@@ -69,7 +69,8 @@ export class CSSIssueType implements Rule {
 }
 
 export const ParseError = {
-	TermExpected: new CSSIssueType("css-termexpected", "term expected"),
-	ExpressionExpected: new CSSIssueType("css-expressionexpected", "expression expected"),
-	RightParenthesisExpected: new CSSIssueType("css-rparentexpected", ") expected"),
+	TermExpected: new IssueType("termexpected", "term expected"),
+	ExpressionExpected: new IssueType("expressionexpected", "expression expected"),
+	RightParenthesisExpected: new IssueType("rparentexpected", ") expected"),
+	RightBracketExpected: new IssueType("rbracketexpected", "] expected"),
 }

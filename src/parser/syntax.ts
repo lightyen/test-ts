@@ -37,5 +37,3 @@ export interface ParamColorKeyword extends Token {
 export interface ParamColorHexValue extends Token {
 	type: "colorHexValue"
 }
-
-type V = ParamString | ParamColorKeyword | ParamColorHexValue | ParamFunction<V> | ParamColorFunction<V>
