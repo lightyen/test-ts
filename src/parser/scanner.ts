@@ -314,6 +314,16 @@ export class Scanner {
 		return false
 	}
 
+	private slash(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		if (ch === ASCII.slash) {
+			this.stream.goAdd(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
 	private number(): boolean {
 		let npeek = 0
 		if (this.stream.peekChar() === ASCII.dot) {
@@ -372,6 +382,26 @@ export class Scanner {
 			(ch >= ASCII._a && ch <= ASCII._z) || // a-z
 			(ch >= ASCII._A && ch <= ASCII._Z) || // A-Z
 			(ch >= ASCII._0 && ch <= ASCII._9) || // 0-9
+			(ch >= 0x80 && ch <= 0xffff)
+		) {
+			// nonascii
+			this.stream.goAdd(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	/** [-._a-zA-Z0-9] */
+	private identTwChar(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		if (
+			ch === ASCII.underscore ||
+			ch === ASCII.hyphen ||
+			ch === ASCII.dot ||
+			(ch >= ASCII._a && ch <= ASCII._z) ||
+			(ch >= ASCII._A && ch <= ASCII._Z) ||
+			(ch >= ASCII._0 && ch <= ASCII._9) ||
 			(ch >= 0x80 && ch <= 0xffff)
 		) {
 			// nonascii
@@ -470,6 +500,29 @@ export class Scanner {
 		}
 		this.stream.goBackTo(pos)
 		return false
+	}
+
+	private twIdent(): ConsumeResult {
+		let result: ConsumeResult = this.identTwChar()
+		let canSlash = true
+
+		let t = result
+
+		while (t) {
+			if (canSlash) {
+				t = this.slash()
+				if (t) {
+					canSlash = false
+				} else {
+					t = this.identTwChar()
+				}
+			} else {
+				t = this.identTwChar()
+				canSlash = true
+			}
+		}
+
+		return result
 	}
 
 	private stringChar(closeQuote: number): ConsumeResult {

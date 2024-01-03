@@ -355,6 +355,19 @@ export class Parser {
 		return this.finish(node)
 	}
 
+	public parseTwIdentifier(): nodes.TwIdentifier | undefined {
+		if (!this.peek(TokenType.Identifier)) {
+			return
+		}
+
+		const word = this.token.getText(this.scanner.source)
+
+		const node = this.create(nodes.Identifier)
+		node.isCustomProperty = word.startsWith("--")
+		this.consumeToken()
+		return this.finish(node)
+	}
+
 	public parseStringLiteral(): nodes.Node | undefined {
 		if (!this.peek(TokenType.String) && !this.peek(TokenType.BadString)) {
 			return
