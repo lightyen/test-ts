@@ -1,16 +1,24 @@
 import { Marker } from "./errors"
 import * as ASCII from "./ascii"
 import { namedColors, hsl2color } from "./color"
+import * as u from "./is"
+export * from "./is"
+
+export interface VisitorFunction {
+	(node: Node): boolean
+}
 
 export enum NodeType {
 	Undefined,
-	CssValue,
 
-	Value,
-	Expression,
+	CssDecl,
+	CssValue,
+	CssExpression,
 
 	ColorFunction,
+	ThemeLiteral,
 	URILiteral,
+	UnicodeRange,
 	Function,
 	Parentheses,
 
@@ -27,20 +35,20 @@ export enum NodeType {
 	Identifier,
 
 	TwProgram,
-	TwExpr,
+
 	TwGroup,
-	TwGroupVariant,
-	TwVariantSpan,
+	TwDecl,
+	TwRaw,
 
-	SimpleVariant,
-	ArbitraryVariant,
-	AnyVariant,
+	TwSpan,
 
-	TwDeclaration,
-	ArbitraryDeclaration,
-	AnyDeclaration,
+	TwModifier,
+	TwIdentifier,
+	TwLiteral,
+	Hyphen,
+	TwSlash,
 
-	Modifier,
+	TwThemeIdentifier,
 }
 
 export interface StringProvider {
@@ -57,8 +65,8 @@ export class Node {
 	public end: number
 	public source: string
 	public parent?: Node
-	public children: Node[] | undefined
-	public issues: Marker[] | undefined
+	private _children?: Node[]
+	public issues?: Marker[]
 	public stringProvider: StringProvider | undefined
 
 	constructor(start = -1, end = -1, nodeType?: NodeType) {
@@ -107,17 +115,17 @@ export class Node {
 	}
 
 	public adoptChild(node: Node, index: number = -1): Node {
-		if (node.parent && node.parent.children) {
-			const idx = node.parent.children.indexOf(node)
+		if (node.parent && node.parent._children) {
+			const idx = node.parent._children.indexOf(node)
 			if (idx >= 0) {
-				node.parent.children.splice(idx, 1)
+				node.parent._children.splice(idx, 1)
 			}
 		}
 		node.parent = this
-		if (!this.children) {
-			this.children = []
+		if (!this._children) {
+			this._children = []
 		}
-		let children = this.children
+		let children = this._children
 		if (index !== -1) {
 			children.splice(index, 0, node)
 		} else {
@@ -140,16 +148,30 @@ export class Node {
 		return false
 	}
 
-	public addChild(node?: Node): node is Node {
+	public addChild<T extends Node>(node?: T): node is T {
 		return this.setNode(node, undefined, node => this.updateRange(node))
 	}
 
 	public hasChildren(): boolean {
-		return Boolean(this.children?.length)
+		return Boolean(this._children?.length)
 	}
 
-	public getChildren(): Node[] {
-		return this.children ? this.children.slice() : []
+	public get children(): Node[] {
+		return this._children ? this._children.slice() : []
+	}
+
+	public get firstChild(): Node | undefined {
+		if (this._children?.length) {
+			return this._children[0]
+		}
+		return undefined
+	}
+
+	public get lastChild(): Node | undefined {
+		if (this._children?.length) {
+			return this._children[this._children.length - 1]
+		}
+		return undefined
 	}
 
 	public updateRange(node: Node) {
@@ -161,11 +183,32 @@ export class Node {
 		}
 	}
 
+	public collectIssues(results: Marker[]) {
+		if (this.issues) {
+			results.push.apply(results, this.issues)
+		}
+	}
+
 	public addIssue(issue: Marker): void {
 		if (!this.issues) {
 			this.issues = []
 		}
 		this.issues.push(issue)
+	}
+
+	public isErroneous(recursive = false): boolean {
+		if (this.issues && this.issues.length > 0) {
+			return true
+		}
+		return recursive && Array.isArray(this.children) && this.children.some(c => c.isErroneous(true))
+	}
+
+	public visit(visitor: VisitorFunction) {
+		if (visitor(this) && this.children) {
+			for (const child of this.children) {
+				child.visit(visitor)
+			}
+		}
 	}
 }
 
@@ -176,21 +219,44 @@ export class Nodelist extends Node {
 	}
 }
 
+export class UnicodeRange extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.UnicodeRange)
+	}
+}
+
+export class CssDecl extends Node {
+	public id?: Identifier
+	public value?: CssValue
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.CssDecl)
+	}
+
+	public setId(node?: Identifier): node is Identifier {
+		return this.setNode(node, 0, node => {
+			this.id = node
+			this.updateRange(node)
+		})
+	}
+
+	public setValue(node?: CssValue): node is CssValue {
+		return this.setNode(node, 0, node => {
+			this.value = node
+			this.updateRange(node)
+		})
+	}
+}
+
 export class CssValue extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.CssValue)
 	}
 }
 
-export class Value extends Node {
+export class CssExpression extends Node {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.Value)
-	}
-}
-
-export class Expression extends Node {
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.Expression)
+		super(start, end, NodeType.CssExpression)
 	}
 }
 
@@ -208,36 +274,54 @@ export class StringLiteral extends Node {
 	}
 }
 
+export class TwIdentifier extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwIdentifier)
+	}
+}
+
+export class TwThemeIdentifier extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwThemeIdentifier)
+	}
+}
+
+export class TwLiteral extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwLiteral)
+	}
+}
+
+export class Hyphen extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.Hyphen)
+	}
+}
+
+export class TwSlash extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwSlash)
+	}
+}
+
 export class Delim extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Delim)
 	}
 }
 
-export class Parentheses extends Node {
-	public arguments?: Value
-	public bracket: [number, number]
+export class Brackets extends Node {
+	public brackets: [number, number]
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Parentheses)
-		this.bracket = [ASCII.leftParenthesis, ASCII.rightParenthesis]
-	}
-
-	public getArguments(): Value | undefined {
-		return this.arguments
-	}
-
-	public setArguments(node?: Value): node is Value {
-		return this.setNode(node, 0, node => {
-			this.arguments = node
-			this.updateRange(node)
-		})
+		this.brackets = [ASCII.leftParenthesis, ASCII.rightParenthesis]
 	}
 }
 
 export class Function extends Node {
 	public identifier?: Identifier
-	public arguments?: Value
+	public arguments?: CssValue
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Function)
@@ -250,23 +334,15 @@ export class Function extends Node {
 		})
 	}
 
-	public getArguments(): Value | undefined {
-		return this.arguments
+	public getName(): string {
+		return this.identifier?.text ?? ""
 	}
 
-	public setArguments(node?: Value): node is Value {
+	public setArguments(node?: CssValue): node is CssValue {
 		return this.setNode(node, 0, node => {
 			this.arguments = node
 			this.updateRange(node)
 		})
-	}
-
-	public getIdentifier() {
-		return this.identifier
-	}
-
-	public getName(): string {
-		return this.identifier?.text ?? ""
 	}
 }
 
@@ -278,10 +354,13 @@ export class ColorFunction extends Function {
 
 	constructor(start: number, end: number) {
 		super(start, end)
+		this.type = NodeType.ColorFunction
 	}
 
-	public get type(): NodeType {
-		return NodeType.ColorFunction
+	static from(node: Function) {
+		const v = new ColorFunction(node.start, node.end)
+		v.setIdentifier(node.identifier)
+		return v
 	}
 
 	public get channels(): number[] {
@@ -313,8 +392,9 @@ export class ColorFunction extends Function {
 	}
 
 	private initColor() {
-		const expresions = this.getArguments()?.getChildren()
-		if (!expresions || expresions.length === 0) {
+		const expressions = this.arguments?.children
+
+		if (!expressions || expressions.length === 0) {
 			this._a = 0
 			this._c = [0, 0, 0]
 			this._name = null
@@ -325,12 +405,12 @@ export class ColorFunction extends Function {
 		let ch: number[] = []
 		const fnName = this.getName().toLowerCase()
 
-		const legacy = expresions.length > 1
+		const legacy = expressions.length > 1
 		if (legacy) {
 			for (let i = 0; i < 3; i++) {
-				const node = expresions[i].getChildren()[0]
+				const node = expressions[i]
 				ch[i] = 0
-				if (isNumericValue(node)) {
+				if (u.isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					if (unit == null) {
 						ch[i] = parseFloat(value)
@@ -354,9 +434,9 @@ export class ColorFunction extends Function {
 			this._a = null
 			this._space = null
 
-			if (expresions[3]) {
-				const node = expresions[3].getChildren()[0]
-				if (isNumericValue(node)) {
+			if (expressions[3]) {
+				const node = expressions[3].children[0]
+				if (u.isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					this._a = parseFloat(value)
 					if (unit === "%") {
@@ -368,7 +448,8 @@ export class ColorFunction extends Function {
 			return
 		}
 
-		let terms = expresions[0].getChildren()
+		let terms = expressions[0].children
+
 		if (fnName === "color") {
 			this._space = terms[0]?.text.toLowerCase() ?? null
 			terms = terms.slice(1)
@@ -379,7 +460,8 @@ export class ColorFunction extends Function {
 		for (let i = 0; i < 3; i++) {
 			const node = terms[i]
 			ch[i] = 0
-			if (isNumericValue(node)) {
+
+			if (u.isNumericValue(node)) {
 				const { value, unit } = node.getValue()
 				if (unit == null) {
 					ch[i] = parseFloat(value)
@@ -403,7 +485,7 @@ export class ColorFunction extends Function {
 		this._a = null
 
 		const node = terms[4]
-		if (isNumericValue(node)) {
+		if (u.isNumericValue(node)) {
 			const { value, unit } = node.getValue()
 			this._a = parseFloat(value)
 			if (unit === "%") {
@@ -411,10 +493,6 @@ export class ColorFunction extends Function {
 			}
 		}
 	}
-}
-
-export function isColorFunction(node?: Node): node is ColorFunction {
-	return node?.type === NodeType.ColorFunction
 }
 
 export class NumericValue extends Node {
@@ -439,10 +517,6 @@ export class NumericValue extends Node {
 			unit: unitIdx < raw.length ? raw.slice(unitIdx) : undefined,
 		}
 	}
-}
-
-export function isNumericValue(node?: Node): node is NumericValue {
-	return node?.type === NodeType.NumericValue
 }
 
 export class HexColorValue extends Node {
@@ -497,10 +571,6 @@ export class HexColorValue extends Node {
 	}
 }
 
-export function isHexColorValue(node?: Node): node is HexColorValue {
-	return node?.type === NodeType.HexColorValue
-}
-
 export class NamedColorValue extends Node {
 	private _c?: number[] | null
 	private _a?: number | null
@@ -530,21 +600,11 @@ export class NamedColorValue extends Node {
 	}
 }
 
-export function isNamedColorValue(node?: Node): node is NamedColorValue {
-	return node?.type === NodeType.NamedColorValue
-}
-
 export class KeywordColorValue extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.KeywordColorValue)
 	}
 }
-
-export function isKeywordColorValue(node?: Node): node is KeywordColorValue {
-	return node?.type === NodeType.KeywordColorValue
-}
-
-/// tw
 
 export class TwProgram extends Node {
 	constructor(start: number, end: number) {
@@ -552,8 +612,133 @@ export class TwProgram extends Node {
 	}
 }
 
-export class TwExpr extends Node {
+export type TwExpression = TwDecl | TwGroup | TwRaw | TwSpan
+
+export class TwModifier extends Node {
+	public wrapped: boolean
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwExpr)
+		super(start, end, NodeType.TwModifier)
 	}
+}
+
+class __TwNode extends Node {
+	public identifier?: TwIdentifier
+	public modifier?: TwModifier
+	public value?: CssDecl
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.Undefined)
+	}
+
+	public setIdentifier(node?: TwIdentifier): node is TwIdentifier {
+		return this.setNode(node, 0, node => {
+			this.identifier = node
+			this.updateRange(node)
+		})
+	}
+
+	public setValue(node?: CssDecl): node is CssDecl {
+		return this.setNode(node, 0, node => {
+			this.value = node
+			this.updateRange(node)
+		})
+	}
+
+	public setModifier(node?: TwModifier): node is TwModifier {
+		return this.setNode(node, 0, node => {
+			this.modifier = node
+			this.updateRange(node)
+		})
+	}
+}
+
+export class TwDecl extends __TwNode {
+	public minus = false
+	public important = false
+	constructor(start: number, end: number) {
+		super(start, end)
+		this.type = NodeType.TwDecl
+	}
+}
+
+export class TwGroup extends Node {
+	public important = false
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwGroup)
+	}
+}
+
+export class TwRaw extends Node {
+	public important = false
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwRaw)
+	}
+}
+
+export class TwSpan extends Node {
+	public variant?: TwDecl | TwGroup | TwRaw
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwSpan)
+	}
+
+	public setVariant<T extends TwDecl | TwGroup | TwRaw>(node?: T): node is T {
+		return this.setNode(node, 0, node => {
+			this.variant = node
+			this.updateRange(node)
+		})
+	}
+
+	public setExpr(node?: TwExpression): node is TwExpression {
+		return this.setNode(node, 0, node => {
+			this.expr = node
+			this.updateRange(node)
+		})
+	}
+}
+
+export class TwNormalVariantSpan extends TwSpan {
+	public variant?: TwDecl
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end)
+	}
+}
+
+export class TwGroupVariantSpan extends TwSpan {
+	public variant?: TwGroup
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end)
+	}
+}
+
+export class TwRawVariantSpan extends TwSpan {
+	public variant?: TwRaw
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end)
+	}
+}
+
+export class ThemeLiteral extends Function {
+	constructor(start: number, end: number) {
+		super(start, end)
+		this.type = NodeType.ThemeLiteral
+	}
+}
+
+export function collectParseError(node: Node) {
+	const entries: Marker[] = []
+	node.visit(node => {
+		if (node.isErroneous()) {
+			node.collectIssues(entries)
+		}
+		return true
+	})
+	return entries
 }

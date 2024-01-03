@@ -151,6 +151,8 @@ export const colorNames = {
 
 export const colorKeywords = ["transparent", "currentColor"]
 
+export const colorFunctions = new Set(["rgb", "rgba", "hsl", "hsla", "hwb", "lch", "lab", "oklab", "oklch", "color"])
+
 export const namedColors: Record<string, [number, number, number]> = {}
 
 for (const name in colorNames) {

@@ -1,0 +1,24 @@
+//bg-[ background-image: cross-fade(20% url(//first.png), url('second.png'))  ]/30
+bg-[theme(colors.red[5.24] /***/ )]
+
+/**
+[color: theme(colorsx.foo-5 / 10 / 109% / 20%)]
+
+	[form + input, form > select]:
+	hello-[ u+100ff center / contain no-repeat url(//media/examples/firefox-logo.svg),
+            #eee 35% url('../../media/examples/lizard.png')]
+
+	>md:text
+	<md:text
+	@xm:sd
+	texcs-[[first header-start] 50px [main-start] 1fr [footer-start] 50px [last]]
+
+	[.bbb, &:hover]:
+
+	border-[10mm]
+
+hover:(text-black bg-black)
+
+!(variant1: variant2:(variant3:
+		// comment
+		variant4:) unknown [unknown: value]):!bg-black

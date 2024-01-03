@@ -3,21 +3,17 @@ import * as ASCII from "./ascii"
 export enum TokenType {
 	EOF,
 	Identifier,
-	String, // quoted
-	BadString, // quoted
+	Token, // tailwind token
+	Modifier, // tailwind raw modifier
+	ThemeIdentifer,
+	String,
+	BadString,
+	UnquotedString,
 	SemiColon,
-	Exclamation,
 
 	Num,
 	Percentage,
 	Dimension,
-	// Length,
-	// Angle,
-	// Time,
-	// Freq,
-	// Resolution,
-	// ContainerQueryLength,
-
 	UnicodeRange,
 
 	Hash,
@@ -30,15 +26,16 @@ export enum TokenType {
 	CurlyR,
 
 	Comma,
-
+	Bang,
 	Slash,
+	Hyphen,
+
 	Delim,
 
 	Undefined,
 }
 
 const staticTokenTable: Record<number, TokenType> = {}
-staticTokenTable[ASCII.semicolon] = TokenType.SemiColon
 staticTokenTable[ASCII.leftBracket] = TokenType.BracketL
 staticTokenTable[ASCII.rightBracket] = TokenType.BracketR
 staticTokenTable[ASCII.leftParenthesis] = TokenType.ParenthesisL
@@ -47,6 +44,8 @@ staticTokenTable[ASCII.leftCurly] = TokenType.CurlyL
 staticTokenTable[ASCII.rightCurly] = TokenType.CurlyR
 staticTokenTable[ASCII.comma] = TokenType.Comma
 staticTokenTable[ASCII.slash] = TokenType.Slash
+staticTokenTable[ASCII.hyphen] = TokenType.Hyphen
+staticTokenTable[ASCII.bang] = TokenType.Bang
 
 // https://developer.mozilla.org/en-US/docs/Web/CSS/length
 const staticUnitTable: Record<string, TokenType> = {}
@@ -106,12 +105,9 @@ const staticUnitTable: Record<string, TokenType> = {}
 
 staticUnitTable["fr"] = TokenType.Percentage
 
-// export interface Token {
-// 	type: TokenType
-// 	start: number
-// 	end: number
-// 	typeStr(): string
-// }
+export function isWhitespace(ch: number): boolean {
+	return ch === ASCII.whitespace || ch === ASCII.tab || ch === ASCII.newline || ch === ASCII.FF || ch === ASCII.CR
+}
 
 export class Token {
 	constructor(
@@ -168,7 +164,7 @@ export class Reader {
 		this.position -= n
 	}
 
-	public goAdd(n: number) {
+	public goForward(n: number) {
 		this.position += n
 	}
 
@@ -190,7 +186,7 @@ export class Reader {
 				return false
 			}
 		}
-		this.goAdd(i)
+		this.goForward(i)
 		return true
 	}
 
@@ -217,12 +213,58 @@ function isHexDigit(ch: number) {
 
 type ConsumeResult = [number, true] | false
 
+export enum Scope {
+	Tw,
+	TwModifier,
+	ThemeLiteral,
+	URILiteral,
+	CssValue,
+	Raw,
+}
+
 export class Scanner {
 	private stream = new Reader("")
-	protected inURL = false
+	private _scope: Scope
+	private supportMultiLineComment: boolean
+	private supportSingleLineComment: boolean
 
-	constructor(input = "") {
+	constructor(input = "", scope = Scope.Tw) {
 		this.stream = new Reader(input)
+		this.scope = scope
+	}
+
+	public get scope(): Scope {
+		return this._scope
+	}
+
+	public set scope(v: Scope) {
+		this._scope = v
+		switch (v) {
+			case Scope.Tw:
+				this.supportMultiLineComment = true
+				this.supportSingleLineComment = true
+				break
+			case Scope.TwModifier:
+				this.supportMultiLineComment = true
+				this.supportSingleLineComment = true
+				break
+			case Scope.CssValue:
+				this.supportMultiLineComment = true
+				this.supportSingleLineComment = true
+				break
+			case Scope.ThemeLiteral:
+				this.supportMultiLineComment = true
+				this.supportSingleLineComment = false
+				break
+			case Scope.Raw:
+				this.supportMultiLineComment = false
+				this.supportSingleLineComment = false
+				break
+			case Scope.URILiteral:
+				this.supportMultiLineComment = false
+				this.supportSingleLineComment = false
+				break
+		}
 	}
 
 	public setSource(input: string) {
@@ -248,14 +290,12 @@ export class Scanner {
 	///
 
 	public whitespace(): boolean {
-		const n = this.stream.goWhileChar(
-			ch => ch === ASCII.whitespace || ch === ASCII.TAB || ch === ASCII.Newline || ch === ASCII.FF || ch === ASCII.CR,
-		)
+		const n = this.stream.goWhileChar(isWhitespace)
 		return n > 0
 	}
 
 	public comment(): boolean {
-		if (this.stream.goIfChars(ASCII.slash, ASCII.asterisk)) {
+		if (this.supportMultiLineComment && this.stream.goIfChars(ASCII.slash, ASCII.asterisk)) {
 			let success = false
 			let hot = false
 			this.stream.goWhileChar(ch => {
@@ -267,7 +307,23 @@ export class Scanner {
 				return true
 			})
 			if (success) {
-				this.stream.goAdd(1)
+				this.stream.goForward(1)
+			}
+			return true
+		} else if (this.supportSingleLineComment && this.stream.goIfChars(ASCII.slash, ASCII.slash)) {
+			let success = false
+			this.stream.goWhileChar(ch => {
+				switch (ch) {
+					case ASCII.newline:
+					case ASCII.CR:
+					case ASCII.FF:
+						success = true
+						return false
+				}
+				return true
+			})
+			if (success) {
+				this.stream.goForward(1)
 			}
 			return true
 		}
@@ -275,22 +331,23 @@ export class Scanner {
 	}
 
 	public trivia() {
-		while (true) {
-			// const offset = stream.pos()
-			if (this.whitespace()) {
-				//
-			} else if (this.comment()) {
-				//
-			} else {
-				return null
-			}
-		}
+		while (this.whitespace() || this.comment()) {}
 	}
 
 	private minus(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		if (ch === ASCII.hyphen) {
-			this.stream.goAdd(1)
+			this.stream.goForward(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	private slash(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		if (ch === ASCII.slash) {
+			this.stream.goForward(1)
 			const end = this.stream.pos()
 			return [end, true]
 		}
@@ -304,7 +361,7 @@ export class Scanner {
 		}
 		let ch = this.stream.peekChar(npeek)
 		if (isDigit(ch)) {
-			this.stream.goAdd(npeek + 1)
+			this.stream.goForward(npeek + 1)
 			this.stream.goWhileChar(ch => {
 				return isDigit(ch) || (npeek === 0 && ch === ASCII.dot)
 			})
@@ -318,10 +375,10 @@ export class Scanner {
 		switch (ch) {
 			case ASCII.CR:
 			case ASCII.FF:
-			case ASCII.Newline:
-				this.stream.goAdd(1)
+			case ASCII.newline:
+				this.stream.goForward(1)
 				let end = this.stream.pos()
-				if (ch === ASCII.CR && this.stream.goIfChar(ASCII.Newline)) {
+				if (ch === ASCII.CR && this.stream.goIfChar(ASCII.newline)) {
 					end++
 				}
 				return [end, true]
@@ -329,6 +386,7 @@ export class Scanner {
 		return false
 	}
 
+	/** [_a-zA-Z] */
 	private identFirstChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		if (
@@ -338,13 +396,14 @@ export class Scanner {
 			(ch >= 0x80 && ch <= 0xffff)
 		) {
 			// nonascii
-			this.stream.goAdd(1)
+			this.stream.goForward(1)
 			const end = this.stream.pos()
 			return [end, true]
 		}
 		return false
 	}
 
+	/** [-_a-zA-Z0-9] */
 	private identChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		if (
@@ -352,11 +411,93 @@ export class Scanner {
 			ch === ASCII.hyphen || // -
 			(ch >= ASCII._a && ch <= ASCII._z) || // a-z
 			(ch >= ASCII._A && ch <= ASCII._Z) || // A-Z
-			(ch >= ASCII._0 && ch <= ASCII._9) || // 0/9
+			(ch >= ASCII._0 && ch <= ASCII._9) || // 0-9
 			(ch >= 0x80 && ch <= 0xffff)
 		) {
 			// nonascii
-			this.stream.goAdd(1)
+			this.stream.goForward(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	/** ascii, printable, and [^-!\(\)\[\]\{\}\/\:\'\;\,\"] */
+	private twIdentChar(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		switch (ch) {
+			case ASCII.hyphen:
+			case ASCII.bang:
+			case ASCII.leftBracket:
+			case ASCII.rightBracket:
+			case ASCII.leftParenthesis:
+			case ASCII.rightParenthesis:
+			case ASCII.leftCurly:
+			case ASCII.rightCurly:
+			case ASCII.slash:
+			case ASCII.colon:
+			case ASCII.semicolon:
+			case ASCII.comma:
+			case ASCII.singleQuote:
+			case ASCII.doubleQuote:
+				return false
+		}
+		if ((ch >= 0x21 && ch <= 0x7e) || (ch >= 0x80 && ch <= 0xffff)) {
+			this.stream.goForward(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	/** ascii, printable, and [^\(\)\[\]\{\}\.] */
+	private themeChar(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		switch (ch) {
+			case ASCII.leftBracket:
+			case ASCII.rightBracket:
+			case ASCII.leftParenthesis:
+			case ASCII.rightParenthesis:
+			case ASCII.leftCurly:
+			case ASCII.rightCurly:
+			case ASCII.singleQuote:
+			case ASCII.doubleQuote:
+			case ASCII.dot:
+				return false
+		}
+		if ((ch >= 0x21 && ch <= 0x7e) || (ch >= 0x80 && ch <= 0xffff)) {
+			this.stream.goForward(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	private rawChar(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		switch (ch) {
+			case ASCII.leftBracket:
+			case ASCII.rightBracket:
+			case ASCII.leftParenthesis:
+			case ASCII.rightParenthesis:
+			case ASCII.leftCurly:
+			case ASCII.rightCurly:
+			case ASCII.singleQuote:
+			case ASCII.doubleQuote:
+				return false
+		}
+		if ((ch >= 0x21 && ch <= 0x7e) || (ch >= 0x80 && ch <= 0xffff)) {
+			this.stream.goForward(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	private modifierChar(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		if (ch !== ASCII.leftBracket && ch !== ASCII.rightBracket) {
+			this.stream.goForward(1)
 			const end = this.stream.pos()
 			return [end, true]
 		}
@@ -383,16 +524,16 @@ export class Scanner {
 		return false
 	}
 
-	private escape(includeNewLines?: boolean): ConsumeResult {
+	private escape(includeNewLines = false): ConsumeResult {
 		let ch = this.stream.peekChar()
 		if (ch === ASCII.backslash) {
-			this.stream.goAdd(1)
+			this.stream.goForward(1)
 			ch = this.stream.peekChar()
 			let hexNumCount = 0
 			let pos = this.stream.pos()
 
 			while (hexNumCount < 6 && isHexDigit(ch)) {
-				this.stream.goAdd(1)
+				this.stream.goForward(1)
 				ch = this.stream.peekChar()
 				hexNumCount++
 			}
@@ -406,15 +547,15 @@ export class Scanner {
 				} catch {}
 
 				// optional whitespace or new line, not part of result text
-				if (ch === ASCII.whitespace || ch === ASCII.TAB) {
-					this.stream.goAdd(1)
+				if (ch === ASCII.whitespace || ch === ASCII.tab) {
+					this.stream.goForward(1)
 				} else {
 					this.newline()
 				}
 				return [pos, true]
 			}
-			if (ch !== ASCII.CR && ch !== ASCII.FF && ch !== ASCII.Newline) {
-				this.stream.goAdd(1)
+			if (ch !== ASCII.CR && ch !== ASCII.FF && ch !== ASCII.newline) {
+				this.stream.goForward(1)
 				const pos = this.stream.pos()
 				return [pos, true]
 			} else if (includeNewLines) {
@@ -422,6 +563,15 @@ export class Scanner {
 			}
 		}
 		return false
+	}
+
+	private unquotedString(): ConsumeResult {
+		let result = this.unquotedChar() || this.escape()
+		let t = result
+		while ((t = this.unquotedChar() || this.escape())) {
+			result = t
+		}
+		return result
 	}
 
 	private name(): ConsumeResult {
@@ -432,12 +582,12 @@ export class Scanner {
 		return matched
 	}
 
-	private ident(): ConsumeResult {
+	private cssIdent(): ConsumeResult {
 		const pos = this.stream.pos()
 		const hasMinus = this.minus()
 		let result: ConsumeResult = false
 		if (hasMinus) {
-			if ((result = this.minus() || this.identFirstChar() || this.escape())) {
+			if ((result = this.minus() /* -- */ || this.identFirstChar() || this.escape())) {
 				for (let m = this.identChar() || this.escape(); m; m = this.identChar() || this.escape()) {
 					result = m
 				}
@@ -453,6 +603,72 @@ export class Scanner {
 		return false
 	}
 
+	private themeIdent(): ConsumeResult {
+		let result: ConsumeResult = this.themeChar()
+		let t = result
+		while (t) {
+			t = this.themeChar()
+		}
+		return result
+	}
+
+	private rawIdent(): ConsumeResult {
+		let result: ConsumeResult = this.rawChar()
+		let t = result
+		while (t) {
+			t = this.rawChar()
+		}
+		return result
+	}
+
+	private twToken(): ConsumeResult {
+		let result: ConsumeResult = this.twIdentChar()
+		let t = result
+		while (t) {
+			t = this.twIdentChar()
+		}
+		return result
+	}
+
+	private modifier(): ConsumeResult {
+		let result: ConsumeResult = this.modifierChar()
+		let t = result
+		while (t) {
+			t = this.modifierChar()
+		}
+		return result
+	}
+
+	public scanUnquotedString() {
+		const offset = this.stream.pos()
+		if (this.unquotedString()) {
+			return this.finishToken(TokenType.UnquotedString, offset, this.stream.pos())
+		}
+	}
+
+	private ident(offset: number) {
+		switch (this.scope) {
+			case Scope.Tw:
+				if (this.twToken()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
+				break
+			case Scope.TwModifier:
+				if (this.modifier()) return this.finishToken(TokenType.Modifier, offset, this.stream.pos())
+				break
+			case Scope.ThemeLiteral:
+				if (this.themeIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
+				break
+			case Scope.Raw:
+				if (this.rawIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
+				break
+			case Scope.CssValue:
+				if (this.cssIdent()) return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
+				break
+			case Scope.URILiteral:
+				if (this.cssIdent()) return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
+				break
+		}
+	}
+
 	private stringChar(closeQuote: number): ConsumeResult {
 		// not closeQuote, not backslash, not newline
 		const ch = this.stream.peekChar()
@@ -462,16 +678,39 @@ export class Scanner {
 			ch !== ASCII.backslash &&
 			ch !== ASCII.CR &&
 			ch !== ASCII.FF &&
-			ch !== ASCII.Newline
+			ch !== ASCII.newline
 		) {
 			const pos = this.stream.pos()
-			this.stream.goAdd(1)
+			this.stream.goForward(1)
 			return [pos, true]
 		}
 		return false
 	}
 
-	private string(): [number, TokenType] | null {
+	private unquotedChar(): ConsumeResult {
+		// not closeQuote, not backslash, not newline
+		const ch = this.stream.peekChar()
+		if (
+			ch !== ASCII.EOF &&
+			ch !== ASCII.backslash &&
+			ch !== ASCII.singleQuote &&
+			ch !== ASCII.doubleQuote &&
+			ch !== ASCII.leftParenthesis &&
+			ch !== ASCII.rightParenthesis &&
+			ch !== ASCII.whitespace &&
+			ch !== ASCII.tab &&
+			ch !== ASCII.newline &&
+			ch !== ASCII.FF &&
+			ch !== ASCII.CR
+		) {
+			const pos = this.stream.pos()
+			this.stream.goForward(1)
+			return [pos, true]
+		}
+		return false
+	}
+
+	private string(): [number, TokenType.String | TokenType.BadString] | null {
 		if (this.stream.peekChar() === ASCII.singleQuote || this.stream.peekChar() === ASCII.doubleQuote) {
 			let end = this.stream.pos()
 			const closeQuote = this.stream.nextChar()
@@ -486,8 +725,7 @@ export class Scanner {
 
 			if (this.stream.peekChar() === closeQuote) {
 				this.stream.nextChar()
-				end = end + 1
-				return [end, TokenType.String]
+				return [this.stream.pos(), TokenType.String]
 			} else {
 				return [end, TokenType.BadString]
 			}
@@ -518,55 +756,58 @@ export class Scanner {
 	}
 
 	public scanNext(offset: number): Token {
-		if (this.ident()) {
-			return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
+		const t = this.ident(offset)
+		if (t) {
+			return t
 		}
 
-		if (this.stream.goIfChar(ASCII.hash)) {
-			const result = this.name()
-			if (result) {
-				return this.finishToken(TokenType.Hash, offset, result[0])
-			} else {
-				return this.finishToken(TokenType.Delim, offset, offset + 1)
-			}
-		}
-
-		// Important
-		if (this.stream.goIfChar(ASCII.bang)) {
-			return this.finishToken(TokenType.Exclamation, offset, offset + 1)
-		}
-
-		// Numbers
-		if (this.number()) {
-			let end = this.stream.pos()
-
-			if (this.stream.goIfChar(ASCII.percent)) {
-				// Percentage 43%
-				return this.finishToken(TokenType.Percentage, offset, end + 1)
-			} else if (this.ident()) {
-				const pos = this.stream.pos()
-				const dim = this.stream.slice(end, pos).toLowerCase()
-				const tokenType = staticUnitTable[dim]
-				if (tokenType) {
-					return this.finishToken(tokenType, offset, pos)
+		if (this.scope === Scope.CssValue) {
+			if (this.stream.goIfChar(ASCII.hash)) {
+				const result = this.name()
+				if (result) {
+					return this.finishToken(TokenType.Hash, offset, result[0])
 				} else {
-					return this.finishToken(TokenType.Dimension, offset, pos)
+					return this.finishToken(TokenType.Delim, offset, offset + 1)
 				}
 			}
 
-			return this.finishToken(TokenType.Num, offset, end)
+			// Important
+			if (this.stream.goIfChar(ASCII.bang)) {
+				return this.finishToken(TokenType.Bang, offset, offset + 1)
+			}
+
+			// Numbers
+			if (this.number()) {
+				let end = this.stream.pos()
+
+				if (this.stream.goIfChar(ASCII.percent)) {
+					// Percentage 43%
+					return this.finishToken(TokenType.Percentage, offset, end + 1)
+				} else if (this.cssIdent()) {
+					const pos = this.stream.pos()
+					const dim = this.stream.slice(end, pos).toLowerCase()
+					const tokenType = staticUnitTable[dim]
+					if (tokenType) {
+						return this.finishToken(tokenType, offset, pos)
+					} else {
+						return this.finishToken(TokenType.Dimension, offset, pos)
+					}
+				}
+
+				return this.finishToken(TokenType.Num, offset, end)
+			}
 		}
 
 		// String, BadString
 		const ret = this.string()
 		if (ret) {
-			return this.finishToken(ret[1], offset + 1, ret[0])
+			return this.finishToken(ret[1], offset, ret[0])
 		}
 
 		const tokenType = staticTokenTable[this.stream.peekChar()]
 		if (tokenType != undefined) {
-			this.stream.goAdd(1)
-			return this.finishToken(tokenType, offset, offset + 1)
+			this.stream.goForward(1)
+			return this.finishToken(tokenType, offset, this.stream.pos())
 		}
 
 		// any char

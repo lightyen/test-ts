@@ -1,11 +1,10 @@
-import { Scanner, Token, TokenType } from "./scanner"
+import { Scanner, Scope, Token, TokenType } from "./scanner"
 import * as nodes from "./nodes"
-import { CSSIssueType, Level, Marker, ParseError } from "./errors"
-import { colorKeywords, colorNames } from "./color"
+import { IssueType, Level, Marker, ParseError } from "./errors"
+import { colorFunctions, colorKeywords, colorNames } from "./color"
+import * as ASCII from "./ascii"
 
-const colorFunctions = new Set(["rgb", "rgba", "hsl", "hsla", "hwb", "lch", "lab", "oklab", "oklch", "color"])
-
-interface Mark {
+export interface Mark {
 	prev?: Token
 	current: Token
 	pos: number
@@ -17,18 +16,45 @@ export class Parser {
 	protected prevToken?: Token
 	protected lastErrorToken?: Token
 
-	private inURL = false
+	constructor() {
+		this.scanner = new Scanner()
+	}
 
-	constructor(scnr = new Scanner()) {
-		this.scanner = scnr
+	public set scope(s: Scope) {
+		this.scanner.scope = s
+	}
+
+	public parse<Node extends nodes.Node, U extends Node | undefined>(
+		text: string,
+		parseFunc: () => U,
+		stringProvider?: nodes.StringProvider,
+	): U {
+		this.scanner.setSource(text)
+		this.token = this.scanner.next().value
+		const node: U = parseFunc.bind(this)()
+		if (node) {
+			if (stringProvider) {
+				node.stringProvider = stringProvider
+			} else {
+				node.stringProvider = (start: number, end: number) => text.slice(start, end)
+			}
+		}
+		return node
 	}
 
 	public peekRegExp(type: TokenType, regEx: RegExp): boolean {
 		if (type !== this.token.type) {
 			return false
 		}
-		const raw = this.token.getText(this.scanner.source)
+		const raw = this.getText()
 		return regEx.test(raw)
+	}
+
+	public peekStr(type: TokenType, value: string): boolean {
+		if (type !== this.token.type) {
+			return false
+		}
+		return value === this.getText()
 	}
 
 	public hasWhitespace(): boolean {
@@ -58,6 +84,10 @@ export class Parser {
 		return type === this.token.type
 	}
 
+	public type() {
+		return this.token.type
+	}
+
 	public peekDelim(text: string): boolean {
 		if (!this.peek(TokenType.Delim)) {
 			return false
@@ -65,7 +95,13 @@ export class Parser {
 		return text === this.scanner.source.slice(this.token.start, this.token.end)
 	}
 
-	/** Test current token and consume next. */
+	public acceptDelim(text: string): boolean {
+		if (!this.peekDelim(text)) {
+			return false
+		}
+		return this.accept(TokenType.Delim)
+	}
+
 	public accept(type: TokenType): boolean {
 		if (this.peek(type)) {
 			this.consumeToken()
@@ -76,6 +112,10 @@ export class Parser {
 
 	public create<T>(ctor: nodes.NodeConstructor<T>): T {
 		return new ctor(this.token.start, this.token.end)
+	}
+
+	public createNode(t: nodes.NodeType) {
+		return new nodes.Node(this.token.start, this.token.end, t)
 	}
 
 	public resync(resyncTokens: TokenType[] | undefined, resyncStopTokens: TokenType[] | undefined): boolean {
@@ -96,7 +136,7 @@ export class Parser {
 
 	public finish<T extends nodes.Node>(
 		node: T,
-		error?: CSSIssueType,
+		error?: IssueType,
 		resyncTokens?: TokenType[],
 		resyncStopTokens?: TokenType[],
 	): T {
@@ -117,7 +157,7 @@ export class Parser {
 
 	public markError<T extends nodes.Node>(
 		node: T,
-		error: CSSIssueType,
+		error: IssueType,
 		resyncTokens?: TokenType[],
 		resyncStopTokens?: TokenType[],
 	): void {
@@ -131,124 +171,366 @@ export class Parser {
 		}
 	}
 
-	public parse<Node extends nodes.Node, U extends Node | undefined>(
-		input: string,
-		parseFunc: () => U,
-		stringProvider?: nodes.StringProvider,
-	): U {
-		this.scanner.setSource(input)
-		this.token = this.scanner.next().value
-		const node: U = parseFunc.bind(this)()
-		if (node) {
-			if (stringProvider) {
-				node.stringProvider = stringProvider
-			} else {
-				node.stringProvider = (start: number, end: number) => input.slice(start, end)
-			}
-		}
-		return node
-	}
+	///
 
-	///////
-
-	// public parseCssValue(): nodes.CssValue | undefined {
-	// 	// optional semicolon
-	// }
-
-	public parseTwExpression(): nodes.TwExpr | undefined {
-		return undefined
-	}
-
-	public parseValue(): nodes.Value | undefined {
-		const node = this.create(nodes.Value)
-
-		node.addChild(this.parseExpr())
-
-		while (this.accept(TokenType.Comma)) {
-			if (!node.addChild(this.parseExpr())) {
-				break
-			}
-		}
-
+	public parseTwProgram(): nodes.TwProgram | undefined {
+		const node = this.create(nodes.TwProgram)
+		while (node.addChild(this.parseTwExpr())) {}
 		return this.finish(node)
 	}
 
-	public parseExpr(): nodes.Expression | undefined {
-		const node = this.create(nodes.Expression)
-
-		while (node.addChild(this.parseTermExpression())) {}
-
-		return this.finish(node)
+	public parseTwExpr(): nodes.TwExpression | undefined {
+		return this.parseTwGroupTerm() || this.parseTwDeclTerm() || this.parseTwRawTerm()
 	}
 
-	public parseTermExpression(): nodes.Node | undefined {
-		return (
-			// this._parseUnicodeRange() ||
-			this.parseFunction() ||
-			this.parseParentheses() ||
-			this.parseNamedColor() ||
-			this.parseKeywordColor() ||
-			this.parseIdentifier() ||
-			this.parseStringLiteral() ||
-			this.parseHexColor() ||
-			this.parseNumeric() ||
-			this.parseDelim()
-			// this._parseNamedLine()
-		)
-	}
-
-	public parseUnaryOperator(): nodes.Node | undefined {
-		if (!this.peekDelim("+") && !this.peekDelim("-")) {
+	public parseTwIdentifier(): nodes.TwIdentifier | undefined {
+		if (!this.peek(TokenType.Token)) {
 			return
 		}
-		const node = this.create(nodes.Node)
-		this.consumeToken()
-		return this.finish(node)
-	}
 
-	private debugToken(t: Token) {
-		return t.getText(this.scanner.source)
-	}
-
-	private debugCurrent() {
-		return '"' + this.token.getText(this.scanner.source) + '"'
-	}
-
-	private debugPrev() {
-		return '"' + this.prevToken?.getText(this.scanner.source) + '"'
-	}
-
-	public parseFunction(): nodes.Function | undefined {
 		const pos = this.mark()
-		const node = this.create(nodes.Function)
 
-		if (!node.setIdentifier(this.parseIdentifier())) {
-			return
+		const node = this.create(nodes.TwIdentifier)
+		node.addChild(this.create(nodes.TwLiteral))
+		this.consumeToken()
+
+		while (true) {
+			if (!this.hasWhitespace()) {
+				if (this.peek(TokenType.Token)) {
+					node.addChild(this.create(nodes.TwLiteral))
+					this.consumeToken()
+					continue
+				}
+				if (this.peek(TokenType.Hyphen)) {
+					node.addChild(this.create(nodes.Hyphen))
+					this.consumeToken()
+					continue
+				}
+				if (this.peek(TokenType.Slash)) {
+					node.addChild(this.create(nodes.TwSlash))
+					this.consumeToken()
+					continue
+				}
+			}
+			break
 		}
 
-		const fnName = this.prevToken?.getText(this.scanner.source) ?? ""
-
-		if (this.hasWhitespace() || !this.accept(TokenType.ParenthesisL)) {
+		if (!node.hasChildren()) {
 			this.restoreAtMark(pos)
 			return
 		}
 
-		if (colorFunctions.has(fnName.toLowerCase())) {
-			const cNode = this.create(nodes.ColorFunction)
-			cNode.setIdentifier(node.getIdentifier())
-			cNode.setArguments(this.parseValue())
+		return this.finish(node)
+	}
 
-			if (!this.accept(TokenType.ParenthesisR)) {
-				return this.finish(cNode, ParseError.RightParenthesisExpected)
+	private parseTwGroupTerm(): nodes.TwGroup | nodes.TwSpan | undefined {
+		const pos = this.mark()
+		let important = this.accept(TokenType.Bang)
+		if (important && this.hasWhitespace()) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		const group = this.create(nodes.TwGroup)
+		if (!this.accept(TokenType.ParenthesisL)) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		while (group.addChild(this.parseTwExpr())) {}
+
+		if (!this.accept(TokenType.ParenthesisR)) {
+			return this.finish(group, ParseError.RightParenthesisExpected)
+		}
+		this.finish(group)
+
+		if (!this.hasWhitespace() && this.acceptDelim(":")) {
+			const span = new nodes.TwSpan(group.start, group.end)
+			span.setVariant(group)
+			if (this.hasWhitespace()) {
+				return this.finish(span)
 			}
-			return this.finish(cNode)
+			span.setExpr(this.parseTwExpr())
+			return this.finish(span)
 		}
 
-		if (fnName.toLowerCase() === "url") {
-			// TODO:
+		group.important = important || (!this.hasWhitespace() && this.accept(TokenType.Bang))
+		return this.finish(group)
+	}
+
+	// []:, [], {}:
+	private parseTwRawTerm(): nodes.TwRaw | nodes.TwSpan | undefined {
+		const pos = this.mark()
+		let important = this.accept(TokenType.Bang)
+		if (important && this.hasWhitespace()) {
+			this.restoreAtMark(pos)
+			return
 		}
 
-		node.setArguments(this.parseValue())
+		const raw = this.create(nodes.TwRaw)
+		this.scanner.scope = Scope.CssValue
+		let bracket: TokenType
+		if (this.accept(TokenType.BracketL)) {
+			bracket = TokenType.BracketL
+		} else if (this.accept(TokenType.CurlyL)) {
+			bracket = TokenType.CurlyL
+		} else {
+			this.restoreAtMark(pos)
+			this.scanner.scope = Scope.Tw
+			return
+		}
+
+		raw.addChild(this.parseCssDecl())
+		this.scanner.scope = Scope.Tw
+
+		if (bracket === TokenType.BracketL && this.accept(TokenType.BracketR)) {
+		} else if (bracket === TokenType.CurlyL && this.accept(TokenType.CurlyR)) {
+		} else {
+			return this.finish(raw, ParseError.RightBracketExpected)
+		}
+		this.finish(raw)
+
+		if (!this.hasWhitespace() && this.acceptDelim(":")) {
+			const span = new nodes.TwSpan(raw.start, raw.end)
+			span.setVariant(raw)
+			if (this.hasWhitespace()) {
+				return this.finish(span)
+			}
+			span.setExpr(this.parseTwExpr())
+			return this.finish(span)
+		}
+
+		raw.important = important || (!this.hasWhitespace() && this.accept(TokenType.Bang))
+		return this.finish(raw)
+	}
+
+	// xxx/yyy/zzz
+	// [!]<ident>[!]
+	// <ident>[][/<modifier>]
+	// <ident>[/<modifier>]
+	private parseTwDeclTerm(): nodes.TwDecl | nodes.TwSpan | undefined {
+		const pos = this.mark()
+
+		let important = this.accept(TokenType.Bang)
+		if (important && this.hasWhitespace()) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		const decl = this.create(nodes.TwDecl)
+
+		if (this.accept(TokenType.Hyphen)) {
+			decl.minus = true
+		}
+
+		const key = this.parseTwIdentifier()
+		if (!decl.setIdentifier(key)) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		let skip = false
+		if (!this.hasWhitespace()) {
+			switch (key.lastChild?.type) {
+				case nodes.NodeType.TwLiteral:
+					skip = true
+					break
+				case nodes.NodeType.Hyphen:
+					if (this.peek(TokenType.BracketL)) {
+						this.scanner.scope = Scope.CssValue
+						this.consumeToken()
+						decl.setValue(this.parseCssDecl())
+						this.scanner.scope = Scope.Tw
+						if (!this.accept(TokenType.BracketR)) {
+							return this.finish(decl, ParseError.RightBracketExpected)
+						}
+						this.finish(decl)
+					}
+					break
+				case nodes.NodeType.TwSlash:
+					if (this.peek(TokenType.BracketL)) {
+						this.scanner.scope = Scope.TwModifier
+						this.consumeToken()
+						decl.setModifier(this.parseTwModifier(true))
+						this.scanner.scope = Scope.Tw
+						if (!this.accept(TokenType.BracketR)) {
+							return this.finish(decl, ParseError.RightBracketExpected)
+						}
+						this.finish(decl)
+					}
+					break
+			}
+
+			// vvv-[]/[]
+			if (!skip && !this.hasWhitespace() && this.accept(TokenType.Slash)) {
+				if (this.peek(TokenType.BracketL)) {
+					this.scanner.scope = Scope.TwModifier
+					this.consumeToken()
+					decl.setModifier(this.parseTwModifier(true))
+					this.scanner.scope = Scope.Tw
+					if (!this.accept(TokenType.BracketR)) {
+						return this.finish(decl, ParseError.RightBracketExpected)
+					}
+					this.finish(decl)
+				}
+			}
+		}
+
+		if (!this.hasWhitespace() && this.acceptDelim(":")) {
+			const span = new nodes.TwSpan(decl.start, decl.end)
+			span.setVariant(decl)
+			if (this.hasWhitespace()) {
+				return this.finish(span)
+			}
+			span.setExpr(this.parseTwExpr())
+			return this.finish(span)
+		}
+
+		decl.important = important || (!this.hasWhitespace() && this.accept(TokenType.Bang))
+		return this.finish(decl)
+	}
+
+	public parseTwModifier(wrapped = false): nodes.TwModifier | undefined {
+		const node = this.create(nodes.TwModifier)
+		if (this.peek(TokenType.Modifier)) {
+			node.wrapped = wrapped
+			this.consumeToken()
+		}
+		return this.finish(node)
+	}
+
+	public parseCssDecl(): nodes.CssDecl | undefined {
+		const pos = this.mark()
+		const node = this.create(nodes.CssDecl)
+		const tag = this.parseIdentifier()
+		if (tag) {
+			if (this.acceptDelim(":")) {
+				node.setId(tag)
+			} else {
+				this.restoreAtMark(pos)
+			}
+		}
+		node.setValue(this.parseCssValue())
+		return this.finish(node)
+	}
+
+	public parseCssValue(): nodes.CssValue | undefined {
+		const node = this.create(nodes.CssValue)
+		node.addChild(this.parseCssExpression())
+		while (this.accept(TokenType.Comma)) {
+			if (!node.addChild(this.parseCssExpression())) {
+				break
+			}
+		}
+		if (node.hasChildren()) {
+			return this.finish(node)
+		}
+	}
+
+	private parseCssExpression() {
+		const node = this.create(nodes.CssExpression)
+		while (node.addChild(this.parseCssTermExpr())) {}
+		if (node.hasChildren()) {
+			return this.finish(node)
+		}
+	}
+
+	public parseCssTermExpr() {
+		return (
+			this.parseUnicodeRange() ||
+			this.parseCssFunction() ||
+			this.parseNamedColor() ||
+			this.parseKeywordColor() ||
+			this.parseIdentifier() ||
+			this.parseStringLiteral() ||
+			this.parseNumeric() ||
+			this.parseHexColor() ||
+			this.parseBrackets() ||
+			this.parseAny()
+		)
+	}
+
+	public parseUnicodeRange(): nodes.UnicodeRange | undefined {
+		if (!this.peek(TokenType.Identifier)) {
+			return
+		}
+		if (this.getText().toLowerCase() !== "u") {
+			return
+		}
+		const node = this.create(nodes.UnicodeRange)
+		if (!this.acceptUnicodeRange()) {
+			return
+		}
+		return this.finish(node)
+	}
+
+	public acceptUnicodeRange(): boolean {
+		const token = this.scanner.tryScanUnicode() // +10FFFF
+		if (token) {
+			this.prevToken = token
+			this.token = this.scanner.next().value
+			return true
+		}
+		return false
+	}
+
+	public parseCssFunction(): nodes.Function | undefined {
+		const pos = this.mark()
+		let node = this.create(nodes.Function)
+
+		if (!node.setIdentifier(this.parseIdentifier())) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		let fnName = ""
+		if (this.prevToken) {
+			fnName = this.getText(this.prevToken)
+		}
+		fnName = fnName.toLowerCase()
+
+		if (this.hasWhitespace() || !this.peek(TokenType.ParenthesisL)) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		if (fnName === "theme") {
+			// colors.red.100
+			// colors . space . 1/1
+			// colors.space[1.5]
+			// colors.foo-5 / 10 / 10% / 20%
+			// <value>/<modifier>
+			// <value> := <id>[.<id>|<index>]
+			this.scanner.scope = Scope.ThemeLiteral
+			this.consumeToken()
+			if (this.peek(TokenType.Token)) {
+				node.addChild(this.create(nodes.TwThemeIdentifier))
+				this.consumeToken()
+			}
+			while (true) {
+				if (this.peek(TokenType.BracketR) || this.peek(TokenType.ParenthesisR) || this.peek(TokenType.EOF)) {
+					break
+				}
+				if (node.addChild(this._parseThemeAccessIndentifer() || this._parseThemePropertyIdentifer())) {
+					continue
+				}
+				this.consumeToken()
+			}
+			this.scanner.scope = Scope.CssValue
+		} else if (/^url(-prefix)?$/.test(fnName)) {
+			node.type = nodes.NodeType.URILiteral
+			this.scanner.scope = Scope.URILiteral
+			this.consumeToken()
+			node.addChild(this._parseURLArgument())
+			this.scanner.scope = Scope.CssValue
+		} else if (colorFunctions.has(fnName)) {
+			node = nodes.ColorFunction.from(node)
+			this.consumeToken()
+			node.setArguments(this.parseCssValue())
+		} else {
+			this.consumeToken()
+			node.setArguments(this.parseCssValue())
+		}
 
 		if (!this.accept(TokenType.ParenthesisR)) {
 			return this.finish(node, ParseError.RightParenthesisExpected)
@@ -256,20 +538,32 @@ export class Parser {
 		return this.finish(node)
 	}
 
-	public parseParentheses(): nodes.Parentheses | undefined {
-		const node = this.create(nodes.Parentheses)
+	public parseBrackets(): nodes.Brackets | undefined {
+		const node = this.create(nodes.Brackets)
 
-		if (!this.accept(TokenType.ParenthesisL)) {
-			return
+		if (this.accept(TokenType.ParenthesisL)) {
+			node.addChild(this.parseCssDecl())
+			if (!this.accept(TokenType.ParenthesisR)) {
+				return this.finish(node, ParseError.RightParenthesisExpected)
+			}
+			return this.finish(node)
+		} else if (this.accept(TokenType.BracketL)) {
+			node.brackets = [ASCII.leftBracket, ASCII.rightBracket]
+			const x = node.addChild(this.parseCssDecl())
+			if (!this.accept(TokenType.BracketR)) {
+				return this.finish(node, ParseError.RightBracketExpected)
+			}
+			return this.finish(node)
+		} else if (this.accept(TokenType.CurlyL)) {
+			node.brackets = [ASCII.leftCurly, ASCII.rightCurly]
+			node.addChild(this.parseCssDecl())
+			if (!this.accept(TokenType.CurlyR)) {
+				return this.finish(node, ParseError.RightCurlyExpected)
+			}
+			return this.finish(node)
 		}
 
-		node.setArguments(this.parseValue())
-
-		if (!this.accept(TokenType.ParenthesisR)) {
-			return this.finish(node, ParseError.RightParenthesisExpected)
-		}
-
-		return this.finish(node)
+		return undefined
 	}
 
 	public parseNamedColor(): nodes.NamedColorValue | undefined {
@@ -332,6 +626,7 @@ export class Parser {
 	}
 
 	public parseNumeric(): nodes.NumericValue | undefined {
+		// TODO: type
 		let tokenType: TokenType
 		if (this.peek(TokenType.Percentage)) {
 			tokenType = TokenType.Percentage
@@ -344,16 +639,133 @@ export class Parser {
 		}
 
 		const node = this.create(nodes.NumericValue)
-		// node.setTokenType(tokenType)
 		this.consumeToken()
 		return this.finish(node)
 	}
 
-	public parseDelim(): nodes.Delim | undefined {
-		if (this.peek(TokenType.Delim) || this.peek(TokenType.Slash)) {
-			const node = this.create(nodes.Delim)
+	public parseAny() {
+		switch (this.token.type) {
+			case TokenType.Hash: {
+				const node = this.create(nodes.Identifier)
+				this.consumeToken()
+				return this.finish(node)
+			}
+			case TokenType.Slash:
+			case TokenType.Bang:
+			case TokenType.Delim: {
+				const node = this.create(nodes.Delim)
+				this.consumeToken()
+				return this.finish(node)
+			}
+			// case TokenType.BracketL:
+			// case TokenType.BracketR:
+			// case TokenType.ParenthesisL:
+			// case TokenType.ParenthesisR:
+			// case TokenType.CurlyL:
+			// case TokenType.CurlyR:
+			// case TokenType.Comma:
+			// ...
+		}
+	}
+
+	private _parseThemeAccessIndentifer() {
+		if (!this.peek(TokenType.BracketL)) {
+			return
+		}
+
+		const node = this.create(nodes.TwThemeIdentifier)
+		this.scanner.scope = Scope.Raw
+		this.consumeToken()
+
+		while (true) {
+			if (this.peek(TokenType.Token)) {
+				node.addChild(this.create(nodes.TwLiteral))
+				this.consumeToken()
+				continue
+			}
+			if (!this.peek(TokenType.Slash)) {
+				break
+			}
+			node.addChild(this.create(nodes.Delim))
 			this.consumeToken()
+		}
+
+		this.scanner.scope = Scope.ThemeLiteral
+
+		if (!this.accept(TokenType.BracketR)) {
+			return this.finish(node, ParseError.RightBracketExpected)
+		}
+
+		return this.finish(node)
+	}
+
+	private _parseThemePropertyIdentifer() {
+		if (!this.acceptDelim(".")) {
+			return
+		}
+
+		const node = this.create(nodes.TwThemeIdentifier)
+		node.addChild(this.create(nodes.TwLiteral))
+		this.consumeToken()
+
+		while (true) {
+			if (this.peek(TokenType.Token)) {
+				node.addChild(this.create(nodes.TwLiteral))
+				this.consumeToken()
+				continue
+			}
+			if (!this.peekDelim(".")) {
+				break
+			}
+			node.addChild(this.create(nodes.Delim))
+			this.consumeToken()
+		}
+
+		return node
+	}
+
+	private getText(token = this.token) {
+		return this.scanner.source.slice(token.start, token.end)
+	}
+
+	private devNode(node?: nodes.Node, prefix = "") {
+		if (!node) {
+			return "[null]"
+		}
+		node.stringProvider = (start, end) => this.scanner.source.slice(start, end)
+		return `${prefix} [${node.start}, ${node.end}] ${node.typeText} "${node.text}"`
+	}
+
+	private _parseURLArgument(): nodes.Node | undefined {
+		const node = this.create(nodes.Node)
+		if (this.accept(TokenType.String) || this.accept(TokenType.BadString) || this.acceptUnquotedString()) {
 			return this.finish(node)
 		}
+	}
+
+	private acceptUnquotedString(): boolean {
+		const pos = this.scanner.pos()
+		this.scanner.goBackTo(this.token.start)
+		const unquoted = this.scanner.scanUnquotedString()
+		if (unquoted) {
+			this.token = unquoted
+			this.consumeToken()
+			return true
+		}
+		this.scanner.goBackTo(pos)
+		return false
+	}
+
+	public devToken() {
+		return `${this.token.typeText} [${this.token.start}, ${this.token.end}] "${this.getText()}"`
+	}
+
+	public devPrevToken() {
+		if (!this.prevToken) {
+			return "null prevToken"
+		}
+		return `${this.prevToken.typeText} [${this.prevToken.start}, ${this.prevToken.end}] "${this.getText(
+			this.prevToken,
+		)}"`
 	}
 }
