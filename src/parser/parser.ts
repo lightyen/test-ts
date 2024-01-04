@@ -1,4 +1,4 @@
-import { Scanner, Token, TokenType } from "./scanner"
+import { Scanner, ScannerScope, Token, TokenType } from "./scanner"
 import * as nodes from "./nodes"
 import { IssueType, Level, Marker, ParseError } from "./errors"
 import { colorKeywords, colorNames } from "./color"
@@ -159,12 +159,17 @@ export class Parser {
 
 	public parseTwExpr(): nodes.TwExpression | undefined {
 		const node = this.create(nodes.TwExpression)
-		while (node.addChild(this.parseTwTermExpr())) {}
-		return this.finish(node)
+		let i = 0
+		while (node.addChild(this.parseTwTermExpr())) {
+			i++
+		}
+		if (i > 0) {
+			return this.finish(node)
+		}
 	}
 
 	public parseTwTermExpr(): nodes.Node | undefined {
-		return this.parseTwFunction() || this.parseTwParentheses()
+		return this.parseTwDecl()
 	}
 
 	// xxx/yyy/zzz/modifier
@@ -177,19 +182,19 @@ export class Parser {
 
 		node.important = this.accept(TokenType.Bang)
 
-		if (!node.setIdentifier(this.parseIdentifier())) {
+		if (!node.setIdentifier(this.parseTwIdentifier())) {
 			this.restoreAtMark(pos)
 			return
 		}
 
-		if (!this.accept(TokenType.BracketL)) {
-			return
-		}
-
-		node.setArguments(this.parseCssValue())
-
-		if (!this.accept(TokenType.BracketR)) {
-			return this.finish(node, ParseError.RightBracketExpected)
+		if (!this.hasWhitespace() && this.peek(TokenType.BracketL)) {
+			this.scanner.scope = ScannerScope.Css
+			this.consumeToken()
+			node.setArguments(this.parseCssValue())
+			this.scanner.scope = ScannerScope.Tw
+			if (!this.accept(TokenType.BracketR)) {
+				return this.finish(node, ParseError.RightBracketExpected)
+			}
 		}
 
 		if (!this.hasWhitespace() && this.accept(TokenType.Slash)) {
@@ -356,14 +361,10 @@ export class Parser {
 	}
 
 	public parseTwIdentifier(): nodes.TwIdentifier | undefined {
-		if (!this.peek(TokenType.Identifier)) {
+		if (!this.peek(TokenType.TwIdentifier)) {
 			return
 		}
-
-		const word = this.token.getText(this.scanner.source)
-
-		const node = this.create(nodes.Identifier)
-		node.isCustomProperty = word.startsWith("--")
+		const node = this.create(nodes.TwIdentifier)
 		this.consumeToken()
 		return this.finish(node)
 	}

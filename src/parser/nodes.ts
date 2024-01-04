@@ -31,6 +31,8 @@ export enum NodeType {
 	TwGroup,
 	TwVariantSpan,
 
+	TwIdentifier,
+
 	TwStaticVariant,
 	TwArbitraryVariant,
 	TwRawVariant,
@@ -55,7 +57,7 @@ export class Node {
 	public end: number
 	public source: string
 	public parent?: Node
-	public children?: Node[]
+	private _children?: Node[]
 	public issues?: Marker[]
 	public stringProvider: StringProvider | undefined
 
@@ -105,17 +107,17 @@ export class Node {
 	}
 
 	public adoptChild(node: Node, index: number = -1): Node {
-		if (node.parent && node.parent.children) {
-			const idx = node.parent.children.indexOf(node)
+		if (node.parent && node.parent._children) {
+			const idx = node.parent._children.indexOf(node)
 			if (idx >= 0) {
-				node.parent.children.splice(idx, 1)
+				node.parent._children.splice(idx, 1)
 			}
 		}
 		node.parent = this
-		if (!this.children) {
-			this.children = []
+		if (!this._children) {
+			this._children = []
 		}
-		let children = this.children
+		let children = this._children
 		if (index !== -1) {
 			children.splice(index, 0, node)
 		} else {
@@ -143,11 +145,11 @@ export class Node {
 	}
 
 	public hasChildren(): boolean {
-		return Boolean(this.children?.length)
+		return Boolean(this._children?.length)
 	}
 
-	public getChildren(): Node[] {
-		return this.children ? this.children.slice() : []
+	public get children(): Node[] {
+		return this._children ? this._children.slice() : []
 	}
 
 	public updateRange(node: Node) {
@@ -191,6 +193,12 @@ export class Identifier extends Node {
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Identifier)
+	}
+}
+
+export class TwIdentifier extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwIdentifier)
 	}
 }
 
@@ -305,7 +313,7 @@ export class ColorFunction extends Function {
 	}
 
 	private initColor() {
-		const expresions = this.getArguments()?.getChildren()
+		const expresions = this.getArguments()?.children
 		if (!expresions || expresions.length === 0) {
 			this._a = 0
 			this._c = [0, 0, 0]
@@ -320,7 +328,7 @@ export class ColorFunction extends Function {
 		const legacy = expresions.length > 1
 		if (legacy) {
 			for (let i = 0; i < 3; i++) {
-				const node = expresions[i].getChildren()[0]
+				const node = expresions[i].children[0]
 				ch[i] = 0
 				if (isNumericValue(node)) {
 					const { value, unit } = node.getValue()
@@ -347,7 +355,7 @@ export class ColorFunction extends Function {
 			this._space = null
 
 			if (expresions[3]) {
-				const node = expresions[3].getChildren()[0]
+				const node = expresions[3].children[0]
 				if (isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					this._a = parseFloat(value)
@@ -360,7 +368,7 @@ export class ColorFunction extends Function {
 			return
 		}
 
-		let terms = expresions[0].getChildren()
+		let terms = expresions[0].children
 		if (fnName === "color") {
 			this._space = terms[0]?.text.toLowerCase() ?? null
 			terms = terms.slice(1)
@@ -556,6 +564,13 @@ export class TwModifier extends Node {
 	}
 }
 
+export function isTwDeclaration(node?: Node | null | undefined): node is TwDeclaration {
+	if (!node) {
+		return false
+	}
+	return node.type === NodeType.TwDeclaration
+}
+
 export class TwDeclaration extends Node {
 	public important = false
 
@@ -563,9 +578,9 @@ export class TwDeclaration extends Node {
 		super(start, end, NodeType.TwDeclaration)
 	}
 
-	public identifier?: Identifier
+	public identifier?: TwIdentifier
 
-	public setIdentifier(node?: Identifier): node is Identifier {
+	public setIdentifier(node?: TwIdentifier): node is TwIdentifier {
 		return this.setNode(node, 0, node => {
 			this.identifier = node
 			this.updateRange(node)

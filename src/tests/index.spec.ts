@@ -4,17 +4,21 @@ import {
 	isHexColorValue,
 	isKeywordColorValue,
 	isNamedColorValue,
+	isTwDeclaration,
 } from "../parser/nodes"
 import { Parser } from "../parser/parser"
-import { Scanner } from "../parser/scanner"
+import { Scanner, ScannerScope } from "../parser/scanner"
 
 test("parser", () => {
 	const source = "hsl(160 42% 30% 123 / .3 ), 重新 , #33333366 ,color(rec2020 1 1 1/ 4), chocolate transparent"
-	const p = new Parser(new Scanner(source))
+	const p = new Parser(new Scanner(source, ScannerScope.Css))
 	const n = p.parse(source, p.parseCssValue, (start, end) => source.slice(start, end))
-	for (const c of n?.getChildren() ?? []) {
+	if (!n) {
+		return
+	}
+	for (const c of n.children) {
 		let isColor = false
-		for (const node of c?.getChildren() ?? []) {
+		for (const node of c.children) {
 			if (isColorFunction(node)) {
 				isColor = true
 				console.log(node.name, node.space, node.channels, node.a)
@@ -28,7 +32,7 @@ test("parser", () => {
 		}
 		if (!isColor) {
 			console.log(`node ${c.typeText}: [${c.start} ${c.end}]`, c.text)
-			console.log(c.getChildren())
+			console.log(c.children)
 		}
 	}
 })
@@ -36,9 +40,16 @@ test("parser", () => {
 test("tw", () => {
 	const source = "test-sd -px-0.3 text-[color(srgb 1 1 1)]"
 	const p = new Parser(new Scanner(source))
-	const n = p.parse(source, p.parseCssValue, (start, end) => source.slice(start, end))
-	for (const c of n?.getChildren() ?? []) {
-		console.log(`node ${c.typeText}: [${c.start} ${c.end}]`, c.text)
-		console.log(c.getChildren())
+	const n = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
+	if (!n) {
+		return
+	}
+	for (const c of n.children) {
+		for (const n of c.children) {
+			if (isTwDeclaration(n)) {
+				console.log(`node ${n.typeText}: [${n.start} ${n.end}]`, n.text)
+				// console.log(n.children)
+			}
+		}
 	}
 })

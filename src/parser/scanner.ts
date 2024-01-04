@@ -3,6 +3,7 @@ import * as ASCII from "./ascii"
 export enum TokenType {
 	EOF,
 	Identifier,
+	TwIdentifier,
 	String, // quoted
 	BadString, // quoted
 	SemiColon,
@@ -234,12 +235,19 @@ function isHexDigit(ch: number) {
 
 type ConsumeResult = [number, true] | false
 
+export enum ScannerScope {
+	Tw,
+	Css,
+}
+
 export class Scanner {
 	private stream = new Reader("")
-	protected inURL = false
 
-	constructor(input = "") {
+	public scope: ScannerScope
+
+	constructor(input = "", scope = ScannerScope.Tw) {
 		this.stream = new Reader(input)
+		this.scope = scope
 	}
 
 	public setSource(input: string) {
@@ -356,7 +364,7 @@ export class Scanner {
 		return false
 	}
 
-	/** [_a-zA-Z0-9] */
+	/** [_a-zA-Z] */
 	private identFirstChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		if (
@@ -590,8 +598,14 @@ export class Scanner {
 	}
 
 	public scanNext(offset: number): Token {
-		if (this.ident()) {
-			return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
+		if (this.scope === ScannerScope.Tw) {
+			if (this.twIdent()) {
+				return this.finishToken(TokenType.TwIdentifier, offset, this.stream.pos())
+			}
+		} else {
+			if (this.ident()) {
+				return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
+			}
 		}
 
 		if (this.stream.goIfChar(ASCII.hash)) {
