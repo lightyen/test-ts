@@ -32,6 +32,8 @@ export enum NodeType {
 	TwVariantSpan,
 
 	TwIdentifier,
+	TwIdentifierTerm,
+	TwIdentifierSlash,
 
 	TwStaticVariant,
 	TwArbitraryVariant,
@@ -197,6 +199,12 @@ export class Identifier extends Node {
 }
 
 export class TwIdentifier extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwIdentifier)
+	}
+}
+
+export class TwIdentifierTerm extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwIdentifier)
 	}
@@ -559,6 +567,7 @@ export class TwExpression extends Node {
 }
 
 export class TwModifier extends Node {
+	public wrapped: boolean
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwModifier)
 	}

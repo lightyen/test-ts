@@ -4,6 +4,7 @@ export enum TokenType {
 	EOF,
 	Identifier,
 	TwIdentifier,
+	TwModifier,
 	String, // quoted
 	BadString, // quoted
 	SemiColon,
@@ -118,17 +119,8 @@ staticUnitTable["fr"] = TokenType.Percentage
 // 	typeStr(): string
 // }
 
-export function isTwChar(ch: number): boolean {
-	if (
-		ch === ASCII.underscore || // _
-		(ch >= ASCII._a && ch <= ASCII._z) || // a-z
-		(ch >= ASCII._A && ch <= ASCII._Z) || // A-Z
-		(ch >= ASCII._0 && ch <= ASCII._9) || // 0-9
-		(ch >= 0x80 && ch <= 0xffff)
-	) {
-		return true
-	}
-	return false
+export function isWhitespace(ch: number): boolean {
+	return ch === ASCII.whitespace || ch === ASCII.TAB || ch === ASCII.Newline || ch === ASCII.FF || ch === ASCII.CR
 }
 
 export class Token {
@@ -237,6 +229,7 @@ type ConsumeResult = [number, true] | false
 
 export enum ScannerScope {
 	Tw,
+	TwModifier,
 	Css,
 }
 
@@ -273,9 +266,7 @@ export class Scanner {
 	///
 
 	public whitespace(): boolean {
-		const n = this.stream.goWhileChar(
-			ch => ch === ASCII.whitespace || ch === ASCII.TAB || ch === ASCII.Newline || ch === ASCII.FF || ch === ASCII.CR,
-		)
+		const n = this.stream.goWhileChar(isWhitespace)
 		return n > 0
 	}
 
@@ -401,7 +392,7 @@ export class Scanner {
 	}
 
 	/** [-._a-zA-Z0-9] */
-	private identTwChar(): ConsumeResult {
+	private twChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		if (
 			ch === ASCII.underscore ||
@@ -413,6 +404,16 @@ export class Scanner {
 			(ch >= 0x80 && ch <= 0xffff)
 		) {
 			// nonascii
+			this.stream.goAdd(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	private modifierChar(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		if (ch !== ASCII.leftBracket && ch !== ASCII.rightBracket) {
 			this.stream.goAdd(1)
 			const end = this.stream.pos()
 			return [end, true]
@@ -511,25 +512,20 @@ export class Scanner {
 	}
 
 	private twIdent(): ConsumeResult {
-		let result: ConsumeResult = this.identTwChar()
-		let canSlash = true
-
+		let result: ConsumeResult = this.twChar()
 		let t = result
-
 		while (t) {
-			if (canSlash) {
-				t = this.slash()
-				if (t) {
-					canSlash = false
-				} else {
-					t = this.identTwChar()
-				}
-			} else {
-				t = this.identTwChar()
-				canSlash = true
-			}
+			t = this.twChar()
 		}
+		return result
+	}
 
+	private modifier(): ConsumeResult {
+		let result: ConsumeResult = this.modifierChar()
+		let t = result
+		while (t) {
+			t = this.modifierChar()
+		}
 		return result
 	}
 
@@ -598,14 +594,22 @@ export class Scanner {
 	}
 
 	public scanNext(offset: number): Token {
-		if (this.scope === ScannerScope.Tw) {
-			if (this.twIdent()) {
-				return this.finishToken(TokenType.TwIdentifier, offset, this.stream.pos())
-			}
-		} else {
-			if (this.ident()) {
-				return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
-			}
+		switch (this.scope) {
+			case ScannerScope.Tw:
+				if (this.twIdent()) {
+					return this.finishToken(TokenType.TwIdentifier, offset, this.stream.pos())
+				}
+				break
+			case ScannerScope.TwModifier:
+				if (this.modifier()) {
+					return this.finishToken(TokenType.TwModifier, offset, this.stream.pos())
+				}
+				break
+			case ScannerScope.Css:
+				if (this.ident()) {
+					return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
+				}
+				break
 		}
 
 		if (this.stream.goIfChar(ASCII.hash)) {
