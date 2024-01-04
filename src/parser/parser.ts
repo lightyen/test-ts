@@ -182,28 +182,35 @@ export class Parser {
 
 		node.important = this.accept(TokenType.Bang)
 
-		if (!node.setIdentifier(this.parseTwIdentifier())) {
+		const key = this.parseTwIdentifier()
+		if (!node.setIdentifier(key)) {
 			this.restoreAtMark(pos)
 			return
 		}
 
-		if (!this.hasWhitespace() && this.accept(TokenType.BracketL)) {
-			this.scanner.scope = ScannerScope.Css
-			node.setArguments(this.parseCssValue())
-			this.scanner.scope = ScannerScope.Tw
-			if (!this.accept(TokenType.BracketR)) {
-				return this.finish(node, ParseError.RightBracketExpected)
+		console.log("tw id =", node.start, node.end, this.token.typeText, this.token.start, this.token.end)
+
+		if (!this.hasWhitespace()) {
+			if (key.lastChild?.type === nodes.NodeType.Identifier) {
+				if (this.peek(TokenType.BracketL)) {
+					this.scanner.scope = ScannerScope.Css
+					this.consumeToken()
+					node.setArguments(this.parseCssValue())
+					console.log("aaaaa", this.token.typeText, this.token.start, this.token.end)
+					this.scanner.scope = ScannerScope.Tw
+					if (!this.accept(TokenType.BracketR)) {
+						return this.finish(node, ParseError.RightBracketExpected)
+					}
+				}
 			}
-		}
 
-		// []/<modifier>
-		// []/[<modifier>]
-
-		if (!this.hasWhitespace() && this.accept(TokenType.Slash)) {
-			if (!this.hasWhitespace()) {
+			// []/<modifier>
+			// []/[<modifier>]
+			if (key.lastChild?.type === nodes.NodeType.Delim) {
 				if (this.peek(TokenType.BracketL)) {
 					this.scanner.scope = ScannerScope.TwModifier
 					this.consumeToken()
+					console.log("bbbb", key.lastChild?.typeText)
 					if (this.peek(TokenType.TwModifier)) {
 						const m = this.create(nodes.TwModifier)
 						m.wrapped = true
@@ -376,39 +383,40 @@ export class Parser {
 
 	// xxx/yyy/zzz
 	public parseTwIdentifier(): nodes.TwIdentifier | undefined {
+		const pos = this.mark()
+
 		if (!this.peek(TokenType.TwIdentifier)) {
 			return
 		}
 		const node = this.create(nodes.TwIdentifier)
 
 		if (this.peek(TokenType.TwIdentifier)) {
-			const v = this.create(nodes.Node)
-			v.type = nodes.NodeType.Identifier
+			node.addChild(this.create(nodes.Identifier))
 			this.consumeToken()
-			node.addChild(v)
 		}
 
 		while (true) {
-			if (!this.hasWhitespace() && this.peek(TokenType.TwIdentifier)) {
-				const v = this.create(nodes.Node)
-				v.type = nodes.NodeType.Identifier
-				this.consumeToken()
-				node.addChild(v)
+			if (!this.hasWhitespace()) {
+				if (this.peek(TokenType.TwIdentifier)) {
+					node.addChild(this.create(nodes.Identifier))
+					this.consumeToken()
+					continue
+				}
+				if (this.peek(TokenType.Slash)) {
+					node.addChild(this.create(nodes.Delim))
+					this.consumeToken()
+					continue
+				}
 			}
-
-			if (!this.hasWhitespace() && this.peek(TokenType.Slash)) {
-				const v = this.create(nodes.Node)
-				v.type = nodes.NodeType.Delim
-				this.consumeToken()
-				node.addChild(v)
-			}
-
 			break
 		}
 
-		if (node.hasChildren()) {
-			return this.finish(node)
+		if (!node.hasChildren()) {
+			this.restoreAtMark(pos)
+			return
 		}
+
+		return this.finish(node)
 	}
 
 	public parseStringLiteral(): nodes.Node | undefined {

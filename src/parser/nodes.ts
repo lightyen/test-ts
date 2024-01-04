@@ -154,6 +154,20 @@ export class Node {
 		return this._children ? this._children.slice() : []
 	}
 
+	public get firstChild(): Node | undefined {
+		if (this._children?.length) {
+			return this._children[0]
+		}
+		return undefined
+	}
+
+	public get lastChild(): Node | undefined {
+		if (this._children?.length) {
+			return this._children[this._children.length - 1]
+		}
+		return undefined
+	}
+
 	public updateRange(node: Node) {
 		if (node.start < this.start || this.start === -1) {
 			this.start = node.start
