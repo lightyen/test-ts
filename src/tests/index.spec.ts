@@ -9,8 +9,8 @@ import {
 import { Parser } from "../parser/parser"
 import { Scanner, ScannerScope } from "../parser/scanner"
 
-test("parser", () => {
-	const source = "hsl(160 42% 30% 123 / .3 ), 重新 , #33333366 ,color(rec2020 1 1 1/ 4), chocolate transparent"
+test("css", () => {
+	const source = "hsl(160 42% 30% 123 / .3 ), // 重新 , #33333366 ,color(rec2020 1 1 1/ 4), chocolate transparent"
 	const p = new Parser(new Scanner(source, ScannerScope.Css))
 	const n = p.parse(source, p.parseCssValue, (start, end) => source.slice(start, end))
 	if (!n) {
@@ -37,8 +37,36 @@ test("parser", () => {
 	}
 })
 
+test("a", () => {
+	const source = "color : hsl(160 42% 30% 123 / .3 )"
+	const p = new Parser(new Scanner(source, ScannerScope.Css))
+	const n = p.parse(source, p.parseTwCssValue, (start, end) => source.slice(start, end))
+	if (!n) {
+		return
+	}
+	for (const c of n.children) {
+		let isColor = false
+		for (const node of c.children) {
+			if (isColorFunction(node)) {
+				isColor = true
+				console.log(node.name, node.space, node.channels, node.a)
+			} else if (isHexColorValue(node) || isNamedColorValue(node)) {
+				isColor = true
+				console.log(node.channels, node.a)
+			} else if (isKeywordColorValue(node)) {
+				isColor = true
+				console.log(node.typeText, node.text)
+			}
+		}
+		if (!isColor) {
+			console.log(`node ${c.typeText}: [${c.start} ${c.end}]`, c.text)
+			console.log(c.children)
+		}
+	}
+})
+
 test("tw", () => {
-	const source = "test-sd -px-0.3 whio/dsd/xom sdo/[0.3 ] vov-[data]/[yoc=k] text-[color(srgb 1 1 1)]"
+	const source = "test-sd -px-0.3 whio/dsd/xom sdo/[0.3] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]"
 	const p = new Parser(new Scanner(source))
 	const n = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
 	if (!n) {

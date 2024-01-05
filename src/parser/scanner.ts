@@ -286,6 +286,19 @@ export class Scanner {
 				this.stream.goAdd(1)
 			}
 			return true
+		} else if (this.stream.goIfChars(ASCII.slash, ASCII.slash)) {
+			let success = false
+			this.stream.goWhileChar(ch => {
+				if (ch === ASCII.Newline) {
+					success = true
+					return false
+				}
+				return true
+			})
+			if (success) {
+				this.stream.goAdd(1)
+			}
+			return true
 		}
 		return false
 	}

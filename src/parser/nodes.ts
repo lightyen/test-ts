@@ -32,8 +32,10 @@ export enum NodeType {
 	TwVariantSpan,
 
 	TwIdentifier,
+	TwSlash,
 	TwIdentifierTerm,
 	TwIdentifierSlash,
+	TwCssValue,
 
 	TwStaticVariant,
 	TwArbitraryVariant,
@@ -192,6 +194,29 @@ export class Nodelist extends Node {
 	}
 }
 
+export class TwCssValue extends Node {
+	public tag?: Identifier
+	public value?: CssValue
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwCssValue)
+	}
+
+	public setTag(node?: Identifier): node is Identifier {
+		return this.setNode(node, 0, node => {
+			this.tag = node
+			this.updateRange(node)
+		})
+	}
+
+	public setValue(node?: CssValue): node is CssValue {
+		return this.setNode(node, 0, node => {
+			this.value = node
+			this.updateRange(node)
+		})
+	}
+}
+
 export class CssValue extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.CssValue)
@@ -230,6 +255,12 @@ export class StringLiteral extends Node {
 	}
 }
 
+export class TwSlash extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwSlash)
+	}
+}
+
 export class Delim extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Delim)
@@ -243,10 +274,6 @@ export class Parentheses extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Parentheses)
 		this.bracket = [ASCII.leftParenthesis, ASCII.rightParenthesis]
-	}
-
-	public getArguments(): CssValue | undefined {
-		return this.arguments
 	}
 
 	public setArguments(node?: CssValue): node is CssValue {
@@ -272,19 +299,11 @@ export class Function extends Node {
 		})
 	}
 
-	public getArguments(): CssValue | undefined {
-		return this.arguments
-	}
-
 	public setArguments(node?: CssValue): node is CssValue {
 		return this.setNode(node, 0, node => {
 			this.arguments = node
 			this.updateRange(node)
 		})
-	}
-
-	public getIdentifier() {
-		return this.identifier
 	}
 
 	public getName(): string {
@@ -335,7 +354,7 @@ export class ColorFunction extends Function {
 	}
 
 	private initColor() {
-		const expresions = this.getArguments()?.children
+		const expresions = this.arguments?.children
 		if (!expresions || expresions.length === 0) {
 			this._a = 0
 			this._c = [0, 0, 0]
@@ -602,6 +621,7 @@ export class TwDeclaration extends Node {
 	}
 
 	public identifier?: TwIdentifier
+	public value?: TwCssValue
 
 	public setIdentifier(node?: TwIdentifier): node is TwIdentifier {
 		return this.setNode(node, 0, node => {
@@ -610,15 +630,9 @@ export class TwDeclaration extends Node {
 		})
 	}
 
-	public arguments?: CssValue
-
-	public getArguments(): CssValue | undefined {
-		return this.arguments
-	}
-
-	public setArguments(node?: CssValue): node is CssValue {
+	public setValue(node?: TwCssValue): node is TwCssValue {
 		return this.setNode(node, 0, node => {
-			this.arguments = node
+			this.value = node
 			this.updateRange(node)
 		})
 	}
