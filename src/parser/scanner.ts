@@ -6,19 +6,12 @@ export enum TokenType {
 	Token, // tailwind token
 	Modifier, // tailwind raw modifier
 	String, // quoted
-	BadString, // quoted
+	BadString, // unquoted
 	SemiColon,
 
 	Num,
 	Percentage,
 	Dimension,
-	// Length,
-	// Angle,
-	// Time,
-	// Freq,
-	// Resolution,
-	// ContainerQueryLength,
-
 	UnicodeRange,
 
 	Hash,
@@ -414,7 +407,7 @@ export class Scanner {
 		return false
 	}
 
-	/** ascii, printable, and [^-!\(\)\[\]\{\}\?\:\'\;\"\,] */
+	/** ascii, printable, and [^-!\(\)\[\]\{\}\:\'\;\"\,] */
 	private twIdentChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		switch (ch) {
@@ -426,7 +419,6 @@ export class Scanner {
 			case ASCII.rightParenthesis:
 			case ASCII.leftCurly:
 			case ASCII.rightCurly:
-			case ASCII.question:
 			case ASCII.colon:
 			case ASCII.semicolon:
 			case ASCII.comma:
@@ -578,7 +570,7 @@ export class Scanner {
 		return false
 	}
 
-	private string(): [number, TokenType] | null {
+	private string(): [number, TokenType.String | TokenType.BadString] | null {
 		if (this.stream.peekChar() === ASCII.singleQuote || this.stream.peekChar() === ASCII.doubleQuote) {
 			let end = this.stream.pos()
 			const closeQuote = this.stream.nextChar()
@@ -593,7 +585,7 @@ export class Scanner {
 
 			if (this.stream.peekChar() === closeQuote) {
 				this.stream.nextChar()
-				end = end + 1
+				end += 1
 				return [end, TokenType.String]
 			} else {
 				return [end, TokenType.BadString]

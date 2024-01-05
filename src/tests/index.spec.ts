@@ -80,14 +80,34 @@ test("tw", () => {
 })
 
 test("file", () => {
-	const data = readFileSync("test.txt", "utf8")
+	const data = readFileSync("test", "utf8")
 	const source = data
 	const p = new Parser(new Scanner(source))
 	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
-	if (!program) {
+	print(program)
+})
+
+function print(node?: nodes.Node, prefix = "") {
+	if (!node) {
 		return
 	}
-	for (const node of program.children) {
-		console.log(`node ${node.typeText}: [${node.start} ${node.end}]`, node.text)
+
+	console.log(`${prefix}${node.typeText}(${node.parent?.typeText ?? "null"}): [${node.start} ${node.end}]`, node.text)
+
+	if (nodes.isFunction(node)) {
+		print(node.identifier)
+		print(node.arguments)
+		return
 	}
-})
+
+	if (nodes.isTwDecl(node)) {
+		print(node.identifier)
+		print(node.value)
+		print(node.modifier)
+		return
+	}
+
+	for (const v of node.children) {
+		print(v)
+	}
+}

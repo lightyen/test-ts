@@ -1,6 +1,8 @@
 import { Marker } from "./errors"
 import * as ASCII from "./ascii"
 import { namedColors, hsl2color } from "./color"
+import * as u from "./is"
+export * from "./is"
 
 export enum NodeType {
 	Undefined,
@@ -11,6 +13,7 @@ export enum NodeType {
 
 	ColorFunction,
 	URILiteral,
+	UnicodeRange,
 	Function,
 	Parentheses,
 
@@ -185,6 +188,12 @@ export class Nodelist extends Node {
 	constructor(parent: Node, index: number = -1) {
 		super()
 		this.attachTo(parent, index)
+	}
+}
+
+export class UnicodeRange extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.UnicodeRange)
 	}
 }
 
@@ -371,7 +380,7 @@ export class ColorFunction extends Function {
 			for (let i = 0; i < 3; i++) {
 				const node = expresions[i].children[0]
 				ch[i] = 0
-				if (isNumericValue(node)) {
+				if (u.isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					if (unit == null) {
 						ch[i] = parseFloat(value)
@@ -397,7 +406,7 @@ export class ColorFunction extends Function {
 
 			if (expresions[3]) {
 				const node = expresions[3].children[0]
-				if (isNumericValue(node)) {
+				if (u.isNumericValue(node)) {
 					const { value, unit } = node.getValue()
 					this._a = parseFloat(value)
 					if (unit === "%") {
@@ -420,7 +429,7 @@ export class ColorFunction extends Function {
 		for (let i = 0; i < 3; i++) {
 			const node = terms[i]
 			ch[i] = 0
-			if (isNumericValue(node)) {
+			if (u.isNumericValue(node)) {
 				const { value, unit } = node.getValue()
 				if (unit == null) {
 					ch[i] = parseFloat(value)
@@ -444,7 +453,7 @@ export class ColorFunction extends Function {
 		this._a = null
 
 		const node = terms[4]
-		if (isNumericValue(node)) {
+		if (u.isNumericValue(node)) {
 			const { value, unit } = node.getValue()
 			this._a = parseFloat(value)
 			if (unit === "%") {
@@ -452,10 +461,6 @@ export class ColorFunction extends Function {
 			}
 		}
 	}
-}
-
-export function isColorFunction(node?: Node): node is ColorFunction {
-	return node?.type === NodeType.ColorFunction
 }
 
 export class NumericValue extends Node {
@@ -480,10 +485,6 @@ export class NumericValue extends Node {
 			unit: unitIdx < raw.length ? raw.slice(unitIdx) : undefined,
 		}
 	}
-}
-
-export function isNumericValue(node?: Node): node is NumericValue {
-	return node?.type === NodeType.NumericValue
 }
 
 export class HexColorValue extends Node {
@@ -538,10 +539,6 @@ export class HexColorValue extends Node {
 	}
 }
 
-export function isHexColorValue(node?: Node): node is HexColorValue {
-	return node?.type === NodeType.HexColorValue
-}
-
 export class NamedColorValue extends Node {
 	private _c?: number[] | null
 	private _a?: number | null
@@ -571,21 +568,11 @@ export class NamedColorValue extends Node {
 	}
 }
 
-export function isNamedColorValue(node?: Node): node is NamedColorValue {
-	return node?.type === NodeType.NamedColorValue
-}
-
 export class KeywordColorValue extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.KeywordColorValue)
 	}
 }
-
-export function isKeywordColorValue(node?: Node): node is KeywordColorValue {
-	return node?.type === NodeType.KeywordColorValue
-}
-
-/// tw
 
 export class TwProgram extends Node {
 	constructor(start: number, end: number) {
@@ -602,54 +589,10 @@ export class TwModifier extends Node {
 	}
 }
 
-export function isTwDecl(node?: Node): node is TwDecl {
-	if (!node) {
-		return false
-	}
-	return node.type === NodeType.TwDecl
-}
-
-export function isTwSpan(node?: Node): node is TwSpan {
-	if (!node) {
-		return false
-	}
-	return node.type === NodeType.TwSpan
-}
-
-export function isTwNormalVariantSpan(node?: Node): node is TwNormalVariantSpan {
-	if (!node) {
-		return false
-	}
-	if (!isTwSpan(node)) {
-		return false
-	}
-	return node.variant?.type === NodeType.TwDecl
-}
-
-export function isTwGroupVariantSpan(node?: Node): node is TwGroupVariantSpan {
-	if (!node) {
-		return false
-	}
-	if (!isTwSpan(node)) {
-		return false
-	}
-	return node.variant?.type === NodeType.TwGroup
-}
-
-export function isTwRawVariantSpan(node?: Node): node is TwRawVariantSpan {
-	if (!node) {
-		return false
-	}
-	if (!isTwSpan(node)) {
-		return false
-	}
-	return node.variant?.type === NodeType.TwRaw
-}
-
 class __TwNode extends Node {
 	public identifier?: TwIdentifier
-	public value?: CssDecl
 	public modifier?: TwModifier
+	public value?: CssDecl
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Undefined)
