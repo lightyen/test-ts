@@ -11,16 +11,7 @@ export interface Rule {
 	message: string
 }
 
-export interface IMarker {
-	getNode(): Node
-	getMessage(): string
-	getOffset(): number
-	getLength(): number
-	getRule(): Rule
-	getLevel(): Level
-}
-
-export class Marker implements IMarker {
+export class Marker {
 	constructor(
 		readonly node: Node,
 		readonly rule: Rule,
@@ -30,32 +21,8 @@ export class Marker implements IMarker {
 		readonly end = node.end,
 	) {}
 
-	public getRule(): Rule {
-		return this.rule
-	}
-
-	public getLevel(): Level {
-		return this.level
-	}
-
-	public getOffset(): number {
-		return this.start
-	}
-
-	public getEnd(): number {
-		return this.end
-	}
-
 	public getLength(): number {
 		return this.end - this.start
-	}
-
-	public getNode(): Node {
-		return this.node
-	}
-
-	public getMessage(): string {
-		return this.message
 	}
 }
 

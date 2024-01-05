@@ -62,10 +62,10 @@ test("tw", () => {
 	const source = `
 	test-sd -px-0.3 whio/dsd/xom sdo/[0.3]
 	[:where(&) :is(h1, h2, h3, h4)]
-	[@media (min-height: 400px)]:(flex)
+	[@media (min-height: 400px)]:(flex
 	[content: '[' ] grid-col-[& [cmdk-group-heading]] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]
 	sm:hover:text-gb
-	(sm:hover: just:):quqo-100
+	(sm:hover: just:vv):quqo-100
 		`
 	const p = new Parser(new Scanner(source))
 	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
@@ -73,8 +73,6 @@ test("tw", () => {
 		return
 	}
 	for (const node of program.children) {
-		if (nodes.isTwNormalVariantSpan(node)) {
-			console.log(`node ${node.typeText}: [${node.start} ${node.end}]`, node.text)
-		}
+		console.log(`node ${node.typeText}: [${node.start} ${node.end}]`, node.text)
 	}
 })
