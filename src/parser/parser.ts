@@ -224,7 +224,7 @@ export class Parser {
 		if (!this.accept(TokenType.ParenthesisR)) {
 			return this.finish(group, ParseError.RightParenthesisExpected)
 		}
-		group.end += 1
+		this.finish(group)
 
 		if (!this.hasWhitespace() && this.acceptDelim(":")) {
 			const span = new nodes.TwSpan(group.start, group.end)
@@ -262,7 +262,7 @@ export class Parser {
 		if (!this.accept(TokenType.BracketR)) {
 			return this.finish(raw, ParseError.RightBracketExpected)
 		}
-		raw.end += 1
+		this.finish(raw)
 
 		if (!this.hasWhitespace() && this.acceptDelim(":")) {
 			const span = new nodes.TwSpan(raw.start, raw.end)
@@ -313,7 +313,7 @@ export class Parser {
 						if (!this.accept(TokenType.BracketR)) {
 							return this.finish(decl, ParseError.RightBracketExpected)
 						}
-						decl.end += 1
+						this.finish(decl)
 					}
 					break
 				case nodes.NodeType.TwSlash:
@@ -325,7 +325,7 @@ export class Parser {
 						if (!this.accept(TokenType.BracketR)) {
 							return this.finish(decl, ParseError.RightBracketExpected)
 						}
-						decl.end += 1
+						this.finish(decl)
 					}
 					break
 			}
@@ -340,7 +340,7 @@ export class Parser {
 					if (!this.accept(TokenType.BracketR)) {
 						return this.finish(decl, ParseError.RightBracketExpected)
 					}
-					decl.end += 1
+					this.finish(decl)
 				}
 			}
 		}
