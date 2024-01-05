@@ -33,6 +33,7 @@ export enum TokenType {
 	Comma,
 	Bang,
 	Slash,
+	Hyphen,
 
 	Delim,
 
@@ -48,6 +49,7 @@ staticTokenTable[ASCII.leftCurly] = TokenType.CurlyL
 staticTokenTable[ASCII.rightCurly] = TokenType.CurlyR
 staticTokenTable[ASCII.comma] = TokenType.Comma
 staticTokenTable[ASCII.slash] = TokenType.Slash
+staticTokenTable[ASCII.hyphen] = TokenType.Hyphen
 staticTokenTable[ASCII.bang] = TokenType.Bang
 
 // https://developer.mozilla.org/en-US/docs/Web/CSS/length
@@ -220,6 +222,7 @@ export enum ScannerScope {
 	Tw,
 	TwModifier,
 	Css,
+	URL,
 }
 
 export class Scanner {
@@ -248,6 +251,9 @@ export class Scanner {
 				this.supportSingleComment = true
 				break
 			case ScannerScope.Css:
+				this.supportSingleComment = false
+				break
+			case ScannerScope.URL:
 				this.supportSingleComment = false
 				break
 		}
@@ -299,9 +305,12 @@ export class Scanner {
 		} else if (this.supportSingleComment && this.stream.goIfChars(ASCII.slash, ASCII.slash)) {
 			let success = false
 			this.stream.goWhileChar(ch => {
-				if (ch === ASCII.Newline) {
-					success = true
-					return false
+				switch (ch) {
+					case ASCII.Newline:
+					case ASCII.CR:
+					case ASCII.FF:
+						success = true
+						return false
 				}
 				return true
 			})
@@ -314,16 +323,7 @@ export class Scanner {
 	}
 
 	public trivia() {
-		while (true) {
-			// const offset = stream.pos()
-			if (this.whitespace()) {
-				//
-			} else if (this.comment()) {
-				//
-			} else {
-				return null
-			}
-		}
+		while (this.whitespace() || this.comment()) {}
 	}
 
 	private minus(): ConsumeResult {
@@ -414,19 +414,27 @@ export class Scanner {
 		return false
 	}
 
-	/** [-._a-zA-Z0-9] */
-	private twChar(): ConsumeResult {
+	/** ascii, printable, and [^-!\(\)\[\]\{\}\?\:\'\;\"\,] */
+	private twIdentChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
-		if (
-			ch === ASCII.underscore ||
-			ch === ASCII.hyphen ||
-			ch === ASCII.dot ||
-			(ch >= ASCII._a && ch <= ASCII._z) ||
-			(ch >= ASCII._A && ch <= ASCII._Z) ||
-			(ch >= ASCII._0 && ch <= ASCII._9) ||
-			(ch >= 0x80 && ch <= 0xffff)
-		) {
-			// nonascii
+		switch (ch) {
+			case ASCII.hyphen:
+			case ASCII.bang:
+			case ASCII.leftBracket:
+			case ASCII.rightBracket:
+			case ASCII.leftParenthesis:
+			case ASCII.rightParenthesis:
+			case ASCII.leftCurly:
+			case ASCII.rightCurly:
+			case ASCII.question:
+			case ASCII.colon:
+			case ASCII.semicolon:
+			case ASCII.comma:
+			case ASCII.singleQuote:
+			case ASCII.doubleQuote:
+				return false
+		}
+		if ((ch >= 0x21 && ch <= 0x7e) || (ch >= 0x80 && ch <= 0xffff)) {
 			this.stream.goAdd(1)
 			const end = this.stream.pos()
 			return [end, true]
@@ -535,10 +543,10 @@ export class Scanner {
 	}
 
 	private twToken(): ConsumeResult {
-		let result: ConsumeResult = this.twChar()
+		let result: ConsumeResult = this.twIdentChar()
 		let t = result
 		while (t) {
-			t = this.twChar()
+			t = this.twIdentChar()
 		}
 		return result
 	}

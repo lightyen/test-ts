@@ -27,14 +27,17 @@ export enum NodeType {
 	Identifier,
 
 	TwProgram,
+
 	TwGroup,
-	TwDeclaration,
+	TwDecl,
 	TwRaw,
+
 	TwSpan,
 
 	TwModifier,
 	TwIdentifier,
 	TwToken,
+	TwHyphen,
 	TwSlash,
 }
 
@@ -243,6 +246,12 @@ export class TwIdentifier extends Node {
 export class TwToken extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwToken)
+	}
+}
+
+export class TwHyphen extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwHyphen)
 	}
 }
 
@@ -584,7 +593,7 @@ export class TwProgram extends Node {
 	}
 }
 
-export type TwExpression = TwDeclaration | TwGroup | TwRaw | TwSpan
+export type TwExpression = TwDecl | TwGroup | TwRaw | TwSpan
 
 export class TwModifier extends Node {
 	public wrapped: boolean
@@ -593,11 +602,11 @@ export class TwModifier extends Node {
 	}
 }
 
-export function isTwDeclaration(node?: Node): node is TwDeclaration {
+export function isTwDecl(node?: Node): node is TwDecl {
 	if (!node) {
 		return false
 	}
-	return node.type === NodeType.TwDeclaration
+	return node.type === NodeType.TwDecl
 }
 
 export function isTwSpan(node?: Node): node is TwSpan {
@@ -614,7 +623,7 @@ export function isTwNormalVariantSpan(node?: Node): node is TwNormalVariantSpan 
 	if (!isTwSpan(node)) {
 		return false
 	}
-	return node.variant?.type === NodeType.TwDeclaration
+	return node.variant?.type === NodeType.TwDecl
 }
 
 export function isTwGroupVariantSpan(node?: Node): node is TwGroupVariantSpan {
@@ -668,11 +677,11 @@ class __TwNode extends Node {
 	}
 }
 
-export class TwDeclaration extends __TwNode {
+export class TwDecl extends __TwNode {
 	public important = false
 	constructor(start: number, end: number) {
 		super(start, end)
-		this.type = NodeType.TwDeclaration
+		this.type = NodeType.TwDecl
 	}
 }
 
@@ -691,14 +700,14 @@ export class TwRaw extends Node {
 }
 
 export class TwSpan extends Node {
-	public variant?: TwDeclaration | TwGroup | TwRaw
+	public variant?: TwDecl | TwGroup | TwRaw
 	public expr?: TwExpression
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwSpan)
 	}
 
-	public setVariant<T extends TwDeclaration | TwGroup | TwRaw>(node?: T): node is T {
+	public setVariant<T extends TwDecl | TwGroup | TwRaw>(node?: T): node is T {
 		return this.setNode(node, 0, node => {
 			this.variant = node
 			this.updateRange(node)
@@ -714,7 +723,7 @@ export class TwSpan extends Node {
 }
 
 export class TwNormalVariantSpan extends TwSpan {
-	public variant?: TwDeclaration
+	public variant?: TwDecl
 	public expr?: TwExpression
 
 	constructor(start: number, end: number) {

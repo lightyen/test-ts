@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import * as nodes from "../parser/nodes"
 import { Parser } from "../parser/parser"
 import { Scanner, ScannerScope } from "../parser/scanner"
@@ -62,11 +63,25 @@ test("tw", () => {
 	const source = `
 	test-sd -px-0.3 whio/dsd/xom sdo/[0.3]
 	[:where(&) :is(h1, h2, h3, h4)]
-	[@media (min-height: 400px)]:(flex
+	[#wrapper > * > div > .text]:
+	[@media (min-height: 400px)]:flex
 	[content: '[' ] grid-col-[& [cmdk-group-heading]] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]
 	sm:hover:text-gb
 	(sm:hover: just:vv):quqo-100
 		`
+	const p = new Parser(new Scanner(source))
+	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
+	if (!program) {
+		return
+	}
+	for (const node of program.children) {
+		console.log(`node ${node.typeText}: [${node.start} ${node.end}]`, node.text)
+	}
+})
+
+test("file", () => {
+	const data = readFileSync("test.txt", "utf8")
+	const source = data
 	const p = new Parser(new Scanner(source))
 	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
 	if (!program) {
