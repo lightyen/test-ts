@@ -18,8 +18,6 @@ export class Parser {
 	protected prevToken?: Token
 	protected lastErrorToken?: Token
 
-	private inURL = false
-
 	constructor(scnr = new Scanner()) {
 		this.scanner = scnr
 	}
@@ -405,18 +403,6 @@ export class Parser {
 		return this.finish(node)
 	}
 
-	private debugNode(n?: nodes.Node) {
-		if (!n) {
-			return "[null]"
-		}
-		n.stringProvider = (start, end) => this.scanner.source.slice(start, end)
-		return `[${n.start}, ${n.end}] ${n.typeText} "${n.text}"`
-	}
-
-	private debugToken() {
-		return `${this.token.typeText} "${this.token.getText(this.scanner.source)}"`
-	}
-
 	public parseFunction(): nodes.Function | undefined {
 		const pos = this.mark()
 		const node = this.create(nodes.Function)
@@ -554,7 +540,6 @@ export class Parser {
 		}
 
 		const node = this.create(nodes.NumericValue)
-		// node.setTokenType(tokenType)
 		this.consumeToken()
 		return this.finish(node)
 	}
@@ -565,5 +550,17 @@ export class Parser {
 			this.consumeToken()
 			return this.finish(node)
 		}
+	}
+
+	private devNode(n?: nodes.Node) {
+		if (!n) {
+			return "[null]"
+		}
+		n.stringProvider = (start, end) => this.scanner.source.slice(start, end)
+		return `[${n.start}, ${n.end}] ${n.typeText} "${n.text}"`
+	}
+
+	private devToken() {
+		return `${this.token.typeText} "${this.token.getText(this.scanner.source)}"`
 	}
 }

@@ -108,13 +108,6 @@ const staticUnitTable: Record<string, TokenType> = {}
 
 staticUnitTable["fr"] = TokenType.Percentage
 
-// export interface Token {
-// 	type: TokenType
-// 	start: number
-// 	end: number
-// 	typeStr(): string
-// }
-
 export function isWhitespace(ch: number): boolean {
 	return ch === ASCII.whitespace || ch === ASCII.TAB || ch === ASCII.Newline || ch === ASCII.FF || ch === ASCII.CR
 }
