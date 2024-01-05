@@ -247,6 +247,7 @@ export class Parser {
 		this.scanner.scope = ScannerScope.Css
 		if (!this.accept(TokenType.BracketL)) {
 			this.restoreAtMark(pos)
+			this.scanner.scope = ScannerScope.Tw
 			return
 		}
 
@@ -258,7 +259,6 @@ export class Parser {
 		}
 
 		if (!this.hasWhitespace() && this.acceptDelim(":")) {
-			console.log("raw span")
 			const span = new nodes.TwSpan(raw.start, raw.end)
 			span.setVariant(raw)
 			span.setExpr(this.parseTwExpr())
@@ -307,6 +307,7 @@ export class Parser {
 						this.scanner.scope = ScannerScope.TwModifier
 						this.consumeToken()
 						decl.setModifier(this.parseTwModifier(true))
+						this.scanner.scope = ScannerScope.Tw
 						if (!this.accept(TokenType.BracketR)) {
 							return this.finish(decl, ParseError.RightBracketExpected)
 						}
@@ -319,9 +320,8 @@ export class Parser {
 				if (this.peek(TokenType.BracketL)) {
 					this.scanner.scope = ScannerScope.TwModifier
 					this.consumeToken()
-
 					decl.setModifier(this.parseTwModifier(true))
-
+					this.scanner.scope = ScannerScope.Tw
 					if (!this.accept(TokenType.BracketR)) {
 						return this.finish(decl, ParseError.RightBracketExpected)
 					}
@@ -346,7 +346,6 @@ export class Parser {
 			node.wrapped = wrapped
 			this.consumeToken()
 		}
-		this.scanner.scope = ScannerScope.Tw
 		return this.finish(node)
 	}
 

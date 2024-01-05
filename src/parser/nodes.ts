@@ -27,16 +27,15 @@ export enum NodeType {
 	Identifier,
 
 	TwProgram,
-	TwExpression,
 	TwGroup,
+	TwDeclaration,
 	TwRaw,
 	TwSpan,
-	TwDeclaration,
 
+	TwModifier,
 	TwIdentifier,
 	TwToken,
 	TwSlash,
-	TwModifier,
 }
 
 export interface StringProvider {
@@ -594,37 +593,51 @@ export class TwModifier extends Node {
 	}
 }
 
-export function isTwDeclaration(node?: Node | null | undefined): node is TwDeclaration {
+export function isTwDeclaration(node?: Node): node is TwDeclaration {
 	if (!node) {
 		return false
 	}
 	return node.type === NodeType.TwDeclaration
 }
 
-export class TwSpan extends Node {
-	public variant?: TwDeclaration | TwGroup
-	public expr?: TwExpression
-
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwSpan)
+export function isTwSpan(node?: Node): node is TwSpan {
+	if (!node) {
+		return false
 	}
-
-	public setVariant<T extends TwDeclaration | TwGroup>(node?: T): node is T {
-		return this.setNode(node, 0, node => {
-			this.variant = node
-			this.updateRange(node)
-		})
-	}
-
-	public setExpr(node?: TwExpression): node is TwExpression {
-		return this.setNode(node, 0, node => {
-			this.expr = node
-			this.updateRange(node)
-		})
-	}
+	return node.type === NodeType.TwSpan
 }
 
-export class __TwNode extends Node {
+export function isTwNormalVariantSpan(node?: Node): node is TwNormalVariantSpan {
+	if (!node) {
+		return false
+	}
+	if (!isTwSpan(node)) {
+		return false
+	}
+	return node.variant?.type === NodeType.TwDeclaration
+}
+
+export function isTwGroupVariantSpan(node?: Node): node is TwGroupVariantSpan {
+	if (!node) {
+		return false
+	}
+	if (!isTwSpan(node)) {
+		return false
+	}
+	return node.variant?.type === NodeType.TwGroup
+}
+
+export function isTwRawVariantSpan(node?: Node): node is TwRawVariantSpan {
+	if (!node) {
+		return false
+	}
+	if (!isTwSpan(node)) {
+		return false
+	}
+	return node.variant?.type === NodeType.TwRaw
+}
+
+class __TwNode extends Node {
 	public identifier?: TwIdentifier
 	public value?: CssDecl
 	public modifier?: TwModifier
@@ -674,5 +687,55 @@ export class TwRaw extends Node {
 	public important = false
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwRaw)
+	}
+}
+
+export class TwSpan extends Node {
+	public variant?: TwDeclaration | TwGroup | TwRaw
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwSpan)
+	}
+
+	public setVariant<T extends TwDeclaration | TwGroup | TwRaw>(node?: T): node is T {
+		return this.setNode(node, 0, node => {
+			this.variant = node
+			this.updateRange(node)
+		})
+	}
+
+	public setExpr(node?: TwExpression): node is TwExpression {
+		return this.setNode(node, 0, node => {
+			this.expr = node
+			this.updateRange(node)
+		})
+	}
+}
+
+export class TwNormalVariantSpan extends TwSpan {
+	public variant?: TwDeclaration
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end)
+	}
+}
+
+export class TwGroupVariantSpan extends TwSpan {
+	public variant?: TwGroup
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end)
+	}
+}
+
+export class TwRawVariantSpan extends TwSpan {
+	public variant?: TwRaw
+	public expr?: TwExpression
+
+	constructor(start: number, end: number) {
+		super(start, end)
 	}
 }
