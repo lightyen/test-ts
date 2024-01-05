@@ -66,7 +66,8 @@ test("a", () => {
 })
 
 test("tw", () => {
-	const source = "test-sd -px-0.3 whio/dsd/xom sdo/[0.3] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]"
+	const source =
+		"test-sd -px-0.3 whio/dsd/xom sdo/[0.3] grid-col-[var(--vosd) ] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]"
 	const p = new Parser(new Scanner(source))
 	const n = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
 	if (!n) {

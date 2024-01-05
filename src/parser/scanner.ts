@@ -235,12 +235,33 @@ export enum ScannerScope {
 
 export class Scanner {
 	private stream = new Reader("")
-
-	public scope: ScannerScope
+	private _scope: ScannerScope
+	private supportSingleComment: boolean
 
 	constructor(input = "", scope = ScannerScope.Tw) {
 		this.stream = new Reader(input)
 		this.scope = scope
+
+		this.supportSingleComment = false
+	}
+
+	public get scope(): ScannerScope {
+		return this._scope
+	}
+
+	public set scope(v: ScannerScope) {
+		this._scope = v
+		switch (v) {
+			case ScannerScope.Tw:
+				this.supportSingleComment = true
+				break
+			case ScannerScope.TwModifier:
+				this.supportSingleComment = true
+				break
+			case ScannerScope.Css:
+				this.supportSingleComment = false
+				break
+		}
 	}
 
 	public setSource(input: string) {
@@ -286,7 +307,7 @@ export class Scanner {
 				this.stream.goAdd(1)
 			}
 			return true
-		} else if (this.stream.goIfChars(ASCII.slash, ASCII.slash)) {
+		} else if (this.supportSingleComment && this.stream.goIfChars(ASCII.slash, ASCII.slash)) {
 			let success = false
 			this.stream.goWhileChar(ch => {
 				if (ch === ASCII.Newline) {

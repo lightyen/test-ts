@@ -252,8 +252,6 @@ export class Parser {
 				}
 			}
 
-			console.log(this.debugToken())
-
 			// vvv-[]/[]
 			if (!this.hasWhitespace() && this.accept(TokenType.Slash)) {
 				if (this.peek(TokenType.BracketL)) {
