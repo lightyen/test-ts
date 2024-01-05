@@ -5,6 +5,7 @@ import { namedColors, hsl2color } from "./color"
 export enum NodeType {
 	Undefined,
 
+	CssDecl,
 	CssValue,
 	Expression,
 
@@ -27,23 +28,14 @@ export enum NodeType {
 
 	TwProgram,
 	TwExpression,
-	TwGroupVariant,
 	TwGroup,
-	TwVariantSpan,
+	TwRaw,
+	TwSpan,
+	TwDeclaration,
 
 	TwIdentifier,
+	TwToken,
 	TwSlash,
-	TwIdentifierTerm,
-	TwIdentifierSlash,
-	TwCssValue,
-
-	TwStaticVariant,
-	TwArbitraryVariant,
-	TwRawVariant,
-
-	TwDeclaration,
-	TwRawDeclaration,
-
 	TwModifier,
 }
 
@@ -194,17 +186,17 @@ export class Nodelist extends Node {
 	}
 }
 
-export class TwCssValue extends Node {
-	public tag?: Identifier
+export class CssDecl extends Node {
+	public id?: Identifier
 	public value?: CssValue
 
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwCssValue)
+		super(start, end, NodeType.CssDecl)
 	}
 
-	public setTag(node?: Identifier): node is Identifier {
+	public setId(node?: Identifier): node is Identifier {
 		return this.setNode(node, 0, node => {
-			this.tag = node
+			this.id = node
 			this.updateRange(node)
 		})
 	}
@@ -237,21 +229,21 @@ export class Identifier extends Node {
 	}
 }
 
+export class StringLiteral extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.StringLiteral)
+	}
+}
+
 export class TwIdentifier extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwIdentifier)
 	}
 }
 
-export class TwIdentifierTerm extends Node {
+export class TwToken extends Node {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwIdentifier)
-	}
-}
-
-export class StringLiteral extends Node {
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.StringLiteral)
+		super(start, end, NodeType.TwToken)
 	}
 }
 
@@ -267,18 +259,18 @@ export class Delim extends Node {
 	}
 }
 
-export class Parentheses extends Node {
-	public arguments?: CssValue
-	public bracket: [number, number]
+export class Brackets extends Node {
+	public brackets: [number, number]
+	public value?: CssDecl
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Parentheses)
-		this.bracket = [ASCII.leftParenthesis, ASCII.rightParenthesis]
+		this.brackets = [ASCII.leftParenthesis, ASCII.rightParenthesis]
 	}
 
-	public setArguments(node?: CssValue): node is CssValue {
+	public setValue(node?: CssDecl): node is CssDecl {
 		return this.setNode(node, 0, node => {
-			this.arguments = node
+			this.value = node
 			this.updateRange(node)
 		})
 	}
@@ -593,11 +585,7 @@ export class TwProgram extends Node {
 	}
 }
 
-export class TwExpression extends Node {
-	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwExpression)
-	}
-}
+export type TwExpression = TwDeclaration | TwGroup | TwRaw | TwSpan
 
 export class TwModifier extends Node {
 	public wrapped: boolean
@@ -613,15 +601,37 @@ export function isTwDeclaration(node?: Node | null | undefined): node is TwDecla
 	return node.type === NodeType.TwDeclaration
 }
 
-export class TwDeclaration extends Node {
-	public important = false
+export class TwSpan extends Node {
+	public variant?: TwDeclaration | TwGroup
+	public expr?: TwExpression
 
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwDeclaration)
+		super(start, end, NodeType.TwSpan)
 	}
 
+	public setVariant<T extends TwDeclaration | TwGroup>(node?: T): node is T {
+		return this.setNode(node, 0, node => {
+			this.variant = node
+			this.updateRange(node)
+		})
+	}
+
+	public setExpr(node?: TwExpression): node is TwExpression {
+		return this.setNode(node, 0, node => {
+			this.expr = node
+			this.updateRange(node)
+		})
+	}
+}
+
+export class __TwNode extends Node {
 	public identifier?: TwIdentifier
-	public value?: TwCssValue
+	public value?: CssDecl
+	public modifier?: TwModifier
+
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.Undefined)
+	}
 
 	public setIdentifier(node?: TwIdentifier): node is TwIdentifier {
 		return this.setNode(node, 0, node => {
@@ -630,19 +640,39 @@ export class TwDeclaration extends Node {
 		})
 	}
 
-	public setValue(node?: TwCssValue): node is TwCssValue {
+	public setValue(node?: CssDecl): node is CssDecl {
 		return this.setNode(node, 0, node => {
 			this.value = node
 			this.updateRange(node)
 		})
 	}
 
-	public modifier?: TwModifier
-
 	public setModifier(node?: TwModifier): node is TwModifier {
 		return this.setNode(node, 0, node => {
 			this.modifier = node
 			this.updateRange(node)
 		})
+	}
+}
+
+export class TwDeclaration extends __TwNode {
+	public important = false
+	constructor(start: number, end: number) {
+		super(start, end)
+		this.type = NodeType.TwDeclaration
+	}
+}
+
+export class TwGroup extends Node {
+	public important = false
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwGroup)
+	}
+}
+
+export class TwRaw extends Node {
+	public important = false
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwRaw)
 	}
 }

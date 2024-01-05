@@ -14,21 +14,17 @@
 
 <sep> := ':'
 
-<group-variant> := (<expr>[ <expr>])<sep>
-
 <group> := [!](<expr>[ <expr>])[!]
 
-<declaration> := <plain-decl> | <arbi-decl> | <any-decl>
+<expr> := <group> | <declaration> | <span>
 
-<variantSpan> := <variant><sep><expr>
+<declaration> := <decl> | <any-decl>
 
-<expr> := <declaration> | <variantSpan> | <group>
-
-<variant> := <plain-variant> | <arbi-variant> | <any-variant> | <group-variant>
+<span> := [<group> | <declaration>]<sep><expr>
 
 <plain-decl> := [!][-]<identifier>[/<modifier>][!]
 
-<arbi-decl> := [!][-]<identifier>"-["<css-value>"]"[/<modifier>][!]
+<arbi-decl> := [!][-]<identifier>"["<css-value>"]"[/<modifier>][!]
 
 <modifier> := string | [ string ]
 

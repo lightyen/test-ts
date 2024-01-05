@@ -2,6 +2,7 @@ import { Scanner, ScannerScope, Token, TokenType } from "./scanner"
 import * as nodes from "./nodes"
 import { IssueType, Level, Marker, ParseError } from "./errors"
 import { colorKeywords, colorNames } from "./color"
+import * as ASCII from "./ascii"
 
 const colorFunctions = new Set(["rgb", "rgba", "hsl", "hsla", "hwb", "lch", "lab", "oklab", "oklch", "color"])
 
@@ -63,6 +64,13 @@ export class Parser {
 			return false
 		}
 		return text === this.scanner.source.slice(this.token.start, this.token.end)
+	}
+
+	public acceptDelim(text: string): boolean {
+		if (!this.peekDelim(text)) {
+			return false
+		}
+		return this.accept(TokenType.Delim)
 	}
 
 	/** Test current token and consume next. */
@@ -149,7 +157,7 @@ export class Parser {
 		return node
 	}
 
-	///////
+	///
 
 	public parseTwProgram(): nodes.TwProgram | undefined {
 		const node = this.create(nodes.TwProgram)
@@ -158,38 +166,24 @@ export class Parser {
 	}
 
 	public parseTwExpr(): nodes.TwExpression | undefined {
-		const node = this.create(nodes.TwExpression)
-		let i = 0
-		while (node.addChild(this.parseTwTermExpr())) {
-			i++
-		}
-		if (i > 0) {
-			return this.finish(node)
-		}
+		return this.parseTwGroupTerm() || this.parseTwDeclarationTerm() || this.parseTwRawTerm()
 	}
 
-	public parseTwTermExpr(): nodes.Node | undefined {
-		return this.parseTwDecl()
-	}
-
-	// xxx/yyy/zzz
 	public parseTwIdentifier(): nodes.TwIdentifier | undefined {
-		const pos = this.mark()
-
-		if (!this.peek(TokenType.TwIdentifier)) {
+		if (!this.peek(TokenType.Token)) {
 			return
 		}
-		const node = this.create(nodes.TwIdentifier)
 
-		if (this.peek(TokenType.TwIdentifier)) {
-			node.addChild(this.create(nodes.Identifier))
-			this.consumeToken()
-		}
+		const pos = this.mark()
+
+		const node = this.create(nodes.TwIdentifier)
+		node.addChild(this.create(nodes.TwToken))
+		this.consumeToken()
 
 		while (true) {
 			if (!this.hasWhitespace()) {
-				if (this.peek(TokenType.TwIdentifier)) {
-					node.addChild(this.create(nodes.Identifier))
+				if (this.peek(TokenType.Token)) {
+					node.addChild(this.create(nodes.TwToken))
 					this.consumeToken()
 					continue
 				}
@@ -210,46 +204,114 @@ export class Parser {
 		return this.finish(node)
 	}
 
+	private parseTwGroupTerm(): nodes.TwGroup | nodes.TwSpan | undefined {
+		const pos = this.mark()
+		let important = this.accept(TokenType.Bang)
+		if (important && this.hasWhitespace()) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		const group = this.create(nodes.TwGroup)
+		if (!this.accept(TokenType.ParenthesisL)) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		while (group.addChild(this.parseTwExpr())) {}
+
+		if (!this.accept(TokenType.ParenthesisR)) {
+			return this.finish(group, ParseError.RightParenthesisExpected)
+		}
+
+		if (!this.hasWhitespace() && this.acceptDelim(":")) {
+			const span = new nodes.TwSpan(group.start, group.end)
+			span.setVariant(group)
+			span.setExpr(this.parseTwExpr())
+			return this.finish(span)
+		}
+
+		group.important = important || (!this.hasWhitespace() && this.accept(TokenType.Bang))
+		return this.finish(group)
+	}
+
+	private parseTwRawTerm(): nodes.TwRaw | nodes.TwSpan | undefined {
+		const pos = this.mark()
+		let important = this.accept(TokenType.Bang)
+		if (important && this.hasWhitespace()) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		const raw = this.create(nodes.TwRaw)
+		this.scanner.scope = ScannerScope.Css
+		if (!this.accept(TokenType.BracketL)) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		raw.addChild(this.parseCssDecl())
+		this.scanner.scope = ScannerScope.Tw
+
+		if (!this.accept(TokenType.BracketR)) {
+			return this.finish(raw, ParseError.RightBracketExpected)
+		}
+
+		if (!this.hasWhitespace() && this.acceptDelim(":")) {
+			console.log("raw span")
+			const span = new nodes.TwSpan(raw.start, raw.end)
+			span.setVariant(raw)
+			span.setExpr(this.parseTwExpr())
+			return this.finish(span)
+		}
+
+		raw.important = important || (!this.hasWhitespace() && this.accept(TokenType.Bang))
+		return this.finish(raw)
+	}
+
 	// xxx/yyy/zzz
 	// [!]<ident>[!]
 	// <ident>[][/<modifier>]
 	// <ident>[/<modifier>]
-	private parseTwDecl(): nodes.TwDeclaration | undefined {
+	private parseTwDeclarationTerm(): nodes.TwDeclaration | nodes.TwSpan | undefined {
 		const pos = this.mark()
-		const node = this.create(nodes.TwDeclaration)
 
-		node.important = this.accept(TokenType.Bang)
+		let important = this.accept(TokenType.Bang)
+		if (important && this.hasWhitespace()) {
+			this.restoreAtMark(pos)
+			return
+		}
 
 		const key = this.parseTwIdentifier()
-		if (!node.setIdentifier(key)) {
+		const decl = this.create(nodes.TwDeclaration)
+		if (!decl.setIdentifier(key)) {
 			this.restoreAtMark(pos)
 			return
 		}
 
 		if (!this.hasWhitespace()) {
-			if (key.lastChild?.type === nodes.NodeType.Identifier) {
-				if (this.peek(TokenType.BracketL)) {
-					this.scanner.scope = ScannerScope.Css
-					this.consumeToken()
-					node.setValue(this.parseTwCssValue())
-					this.scanner.scope = ScannerScope.Tw
-					if (!this.accept(TokenType.BracketR)) {
-						return this.finish(node, ParseError.RightBracketExpected)
+			switch (key.lastChild?.type) {
+				case nodes.NodeType.TwToken:
+					if (this.peek(TokenType.BracketL)) {
+						this.scanner.scope = ScannerScope.Css
+						this.consumeToken()
+						decl.setValue(this.parseCssDecl())
+						this.scanner.scope = ScannerScope.Tw
+						if (!this.accept(TokenType.BracketR)) {
+							return this.finish(decl, ParseError.RightBracketExpected)
+						}
 					}
-				}
-			}
-
-			if (key.lastChild?.type === nodes.NodeType.TwSlash) {
-				if (this.peek(TokenType.BracketL)) {
-					this.scanner.scope = ScannerScope.TwModifier
-					this.consumeToken()
-
-					node.setModifier(this.parseTwModifier(true))
-
-					if (!this.accept(TokenType.BracketR)) {
-						return this.finish(node, ParseError.RightBracketExpected)
+					break
+				case nodes.NodeType.TwSlash:
+					if (this.peek(TokenType.BracketL)) {
+						this.scanner.scope = ScannerScope.TwModifier
+						this.consumeToken()
+						decl.setModifier(this.parseTwModifier(true))
+						if (!this.accept(TokenType.BracketR)) {
+							return this.finish(decl, ParseError.RightBracketExpected)
+						}
 					}
-				}
+					break
 			}
 
 			// vvv-[]/[]
@@ -258,23 +320,29 @@ export class Parser {
 					this.scanner.scope = ScannerScope.TwModifier
 					this.consumeToken()
 
-					node.setModifier(this.parseTwModifier(true))
+					decl.setModifier(this.parseTwModifier(true))
 
 					if (!this.accept(TokenType.BracketR)) {
-						return this.finish(node, ParseError.RightBracketExpected)
+						return this.finish(decl, ParseError.RightBracketExpected)
 					}
 				}
 			}
 		}
 
-		node.important = this.accept(TokenType.Bang)
+		if (!this.hasWhitespace() && this.acceptDelim(":")) {
+			const span = new nodes.TwSpan(decl.start, decl.end)
+			span.setVariant(decl)
+			span.setExpr(this.parseTwExpr())
+			return this.finish(span)
+		}
 
-		return this.finish(node)
+		decl.important = important || (!this.hasWhitespace() && this.accept(TokenType.Bang))
+		return this.finish(decl)
 	}
 
 	public parseTwModifier(wrapped = false): nodes.TwModifier | undefined {
 		const node = this.create(nodes.TwModifier)
-		if (this.peek(TokenType.TwModifier)) {
+		if (this.peek(TokenType.Modifier)) {
 			node.wrapped = wrapped
 			this.consumeToken()
 		}
@@ -282,13 +350,13 @@ export class Parser {
 		return this.finish(node)
 	}
 
-	public parseTwCssValue(): nodes.TwCssValue | undefined {
-		const node = this.create(nodes.TwCssValue)
+	public parseCssDecl(): nodes.CssDecl | undefined {
+		const node = this.create(nodes.CssDecl)
 		const pos = this.mark()
 		const tag = this.parseIdentifier()
-		const colon = this.accept(TokenType.Colon)
+		const colon = this.acceptDelim(":")
 		if (colon) {
-			node.setTag(tag)
+			node.setId(tag)
 		} else {
 			this.restoreAtMark(pos)
 		}
@@ -317,7 +385,7 @@ export class Parser {
 		return (
 			// this._parseUnicodeRange() ||
 			this.parseFunction() ||
-			this.parseParentheses() ||
+			this.parseBrackets() ||
 			this.parseNamedColor() ||
 			this.parseKeywordColor() ||
 			this.parseIdentifier() ||
@@ -348,10 +416,6 @@ export class Parser {
 
 	private debugToken() {
 		return `${this.token.typeText} "${this.token.getText(this.scanner.source)}"`
-	}
-
-	private debugPrev() {
-		return '"' + this.prevToken?.getText(this.scanner.source) + '"'
 	}
 
 	public parseFunction(): nodes.Function | undefined {
@@ -392,20 +456,31 @@ export class Parser {
 		return this.finish(node)
 	}
 
-	public parseParentheses(): nodes.Parentheses | undefined {
-		const node = this.create(nodes.Parentheses)
+	// public parseTwGroup(): nodes.TwGroup
 
-		if (!this.accept(TokenType.ParenthesisL)) {
-			return
+	public parseBrackets(): nodes.Brackets | undefined {
+		const node = this.create(nodes.Brackets)
+
+		if (this.accept(TokenType.ParenthesisL)) {
+			node.setValue(this.parseCssDecl())
+			if (!this.accept(TokenType.ParenthesisR)) {
+				return this.finish(node, ParseError.RightParenthesisExpected)
+			}
+		} else if (this.accept(TokenType.BracketL)) {
+			node.brackets = [ASCII.leftBracket, ASCII.rightBracket]
+			node.setValue(this.parseCssDecl())
+			if (!this.accept(TokenType.BracketR)) {
+				return this.finish(node, ParseError.RightBracketExpected)
+			}
+		} else if (this.accept(TokenType.CurlyL)) {
+			node.brackets = [ASCII.leftCurly, ASCII.rightCurly]
+			node.setValue(this.parseCssDecl())
+			if (!this.accept(TokenType.CurlyR)) {
+				return this.finish(node, ParseError.RightCurlyExpected)
+			}
 		}
 
-		node.setArguments(this.parseCssValue())
-
-		if (!this.accept(TokenType.ParenthesisR)) {
-			return this.finish(node, ParseError.RightParenthesisExpected)
-		}
-
-		return this.finish(node)
+		return undefined
 	}
 
 	public parseNamedColor(): nodes.NamedColorValue | undefined {

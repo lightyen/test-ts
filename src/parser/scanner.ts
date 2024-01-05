@@ -3,12 +3,11 @@ import * as ASCII from "./ascii"
 export enum TokenType {
 	EOF,
 	Identifier,
-	TwIdentifier,
-	TwModifier,
+	Token, // tailwind token
+	Modifier, // tailwind raw modifier
 	String, // quoted
 	BadString, // quoted
 	SemiColon,
-	Exclamation,
 
 	Num,
 	Percentage,
@@ -32,18 +31,15 @@ export enum TokenType {
 	CurlyR,
 
 	Comma,
-	Colon,
 	Bang,
-
 	Slash,
+
 	Delim,
 
 	Undefined,
 }
 
 const staticTokenTable: Record<number, TokenType> = {}
-staticTokenTable[ASCII.semicolon] = TokenType.SemiColon
-staticTokenTable[ASCII.colon] = TokenType.Colon
 staticTokenTable[ASCII.leftBracket] = TokenType.BracketL
 staticTokenTable[ASCII.rightBracket] = TokenType.BracketR
 staticTokenTable[ASCII.leftParenthesis] = TokenType.ParenthesisL
@@ -545,7 +541,7 @@ export class Scanner {
 		return false
 	}
 
-	private twIdent(): ConsumeResult {
+	private twToken(): ConsumeResult {
 		let result: ConsumeResult = this.twChar()
 		let t = result
 		while (t) {
@@ -630,13 +626,13 @@ export class Scanner {
 	public scanNext(offset: number): Token {
 		switch (this.scope) {
 			case ScannerScope.Tw:
-				if (this.twIdent()) {
-					return this.finishToken(TokenType.TwIdentifier, offset, this.stream.pos())
+				if (this.twToken()) {
+					return this.finishToken(TokenType.Token, offset, this.stream.pos())
 				}
 				break
 			case ScannerScope.TwModifier:
 				if (this.modifier()) {
-					return this.finishToken(TokenType.TwModifier, offset, this.stream.pos())
+					return this.finishToken(TokenType.Modifier, offset, this.stream.pos())
 				}
 				break
 			case ScannerScope.Css:
@@ -657,7 +653,7 @@ export class Scanner {
 
 		// Important
 		if (this.stream.goIfChar(ASCII.bang)) {
-			return this.finishToken(TokenType.Exclamation, offset, offset + 1)
+			return this.finishToken(TokenType.Bang, offset, offset + 1)
 		}
 
 		// Numbers

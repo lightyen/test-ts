@@ -73,4 +73,5 @@ export const ParseError = {
 	ExpressionExpected: new IssueType("expressionexpected", "expression expected"),
 	RightParenthesisExpected: new IssueType("rparentexpected", ") expected"),
 	RightBracketExpected: new IssueType("rbracketexpected", "] expected"),
+	RightCurlyExpected: new IssueType("rcurlyexpected", "} expected"),
 }

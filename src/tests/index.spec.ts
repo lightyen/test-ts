@@ -38,9 +38,9 @@ test("css", () => {
 })
 
 test("a", () => {
-	const source = "color : hsl(160 42% 30% 123 / .3 )"
+	const source = "& [cmdk-group-heading]"
 	const p = new Parser(new Scanner(source, ScannerScope.Css))
-	const n = p.parse(source, p.parseTwCssValue, (start, end) => source.slice(start, end))
+	const n = p.parse(source, p.parseCssDecl, (start, end) => source.slice(start, end))
 	if (!n) {
 		return
 	}
@@ -66,19 +66,18 @@ test("a", () => {
 })
 
 test("tw", () => {
-	const source =
-		"test-sd -px-0.3 whio/dsd/xom sdo/[0.3] grid-col-[var(--vosd) ] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]"
+	const source = `
+	test-sd -px-0.3 whio/dsd/xom sdo/[0.3]
+	[:where(&) :is(h1, h2, h3, h4)]
+	[@media (min-height: 400px)]:(flex)
+	[content: '[' ] grid-col-[& [cmdk-group-heading]] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]
+		`
 	const p = new Parser(new Scanner(source))
-	const n = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
-	if (!n) {
+	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
+	if (!program) {
 		return
 	}
-	for (const c of n.children) {
-		for (const n of c.children) {
-			if (isTwDeclaration(n)) {
-				console.log(`node ${n.typeText}: [${n.start} ${n.end}]`, n.text)
-				// console.log(n.children)
-			}
-		}
+	for (const node of program.children) {
+		console.log(`node ${node.typeText}: [${node.start} ${node.end}]`, node.text)
 	}
 })
