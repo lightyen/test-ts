@@ -1,4 +1,5 @@
-(sdf sl-[saa ]     ):
+//bg-[ background-image: cross-fade(20% url(//first.png), url('second.png'))  ]/30
+bg-[  theme( colors.red[5.24] )  ]
 /**
 	[form + input, form > select]:
 	hello-[ u+100ff center / contain no-repeat url(//media/examples/firefox-logo.svg),

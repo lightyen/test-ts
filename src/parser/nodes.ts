@@ -9,9 +9,10 @@ export enum NodeType {
 
 	CssDecl,
 	CssValue,
-	Expression,
+	CssExpression,
 
 	ColorFunction,
+	ThemeLiteral,
 	URILiteral,
 	UnicodeRange,
 	Function,
@@ -226,9 +227,9 @@ export class CssValue extends Node {
 	}
 }
 
-export class Expression extends Node {
+export class CssExpression extends Node {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.Expression)
+		super(start, end, NodeType.CssExpression)
 	}
 }
 

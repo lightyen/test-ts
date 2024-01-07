@@ -82,6 +82,10 @@ export class Parser {
 		return new ctor(this.token.start, this.token.end)
 	}
 
+	public createNode(t: nodes.NodeType) {
+		return new nodes.Node(this.token.start, this.token.end, t)
+	}
+
 	public resync(resyncTokens: TokenType[] | undefined, resyncStopTokens: TokenType[] | undefined): boolean {
 		while (true) {
 			if (resyncTokens && resyncTokens.indexOf(this.token.type) !== -1) {
@@ -386,25 +390,27 @@ export class Parser {
 
 	public parseCssValue(): nodes.CssValue | undefined {
 		const node = this.create(nodes.CssValue)
-		node.addChild(this.parseExpr())
+		node.addChild(this.parseCssExpr())
 		while (this.accept(TokenType.Comma)) {
-			if (!node.addChild(this.parseExpr())) {
+			if (!node.addChild(this.parseCssExpr())) {
 				break
 			}
 		}
 		return this.finish(node)
 	}
 
-	public parseExpr(): nodes.Expression | undefined {
-		const node = this.create(nodes.Expression)
-		while (node.addChild(this.parseTermExpr())) {}
+	public parseCssExpr(): nodes.CssExpression | undefined {
+		const node = this.create(nodes.CssExpression)
+		while (node.addChild(this.parseCssTermExpr())) {}
 		return this.finish(node)
 	}
 
-	public parseTermExpr(): nodes.Node | undefined {
+	public parseCssTermExpr(): nodes.Node | undefined {
 		return (
+			this.parseURILiteral() ||
+			this.parseThemeLiteral() ||
 			this.parseUnicodeRange() ||
-			this.parseFunction() ||
+			this.parseCssFunction() ||
 			this.parseBrackets() ||
 			this.parseNamedColor() ||
 			this.parseKeywordColor() ||
@@ -444,16 +450,64 @@ export class Parser {
 		if (!this.peekDelim("+") && !this.peekDelim("-")) {
 			return
 		}
-		const node = this.create(nodes.Node)
+		const node = this.createNode(nodes.NodeType.Delim)
 		this.consumeToken()
 		return this.finish(node)
 	}
 
-	public parseFunction(): nodes.Function | undefined {
+	public parseURILiteral() {
+		if (!this.peekRegExp(TokenType.Identifier, /^url(-prefix)?$/i)) {
+			return
+		}
+		const pos = this.mark()
+		const node = this.createNode(nodes.NodeType.URILiteral)
+		this.accept(TokenType.Identifier)
+
+		if (this.hasWhitespace() || !this.peek(TokenType.ParenthesisL)) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		this.scanner.scope = ScannerScope.URILiteral
+		this.consumeToken()
+		node.addChild(this._parseURLArgument())
+		this.scanner.scope = ScannerScope.Css
+
+		if (!this.accept(TokenType.ParenthesisR)) {
+			return this.finish(node, ParseError.RightParenthesisExpected)
+		}
+		return this.finish(node)
+	}
+
+	public parseThemeLiteral() {
+		if (!this.peekRegExp(TokenType.Identifier, /^theme$/i)) {
+			return
+		}
+		const pos = this.mark()
+		const node = this.createNode(nodes.NodeType.ThemeLiteral)
+		this.accept(TokenType.Identifier)
+
+		if (this.hasWhitespace() || !this.peek(TokenType.ParenthesisL)) {
+			this.restoreAtMark(pos)
+			return
+		}
+
+		this.scanner.scope = ScannerScope.TwTheme
+		this.consumeToken()
+		node.addChild(this._parseThemeArgument())
+		this.scanner.scope = ScannerScope.Css
+
+		if (!this.accept(TokenType.ParenthesisR)) {
+			return this.finish(node, ParseError.RightParenthesisExpected)
+		}
+		return this.finish(node)
+	}
+
+	public parseCssFunction(): nodes.Function | undefined {
 		const pos = this.mark()
 
-		const node = this.create(nodes.Function)
-		if (!node.setIdentifier(this.parseIdentifier())) {
+		const fn = this.create(nodes.Function)
+		if (!fn.setIdentifier(this.parseIdentifier())) {
 			return
 		}
 
@@ -461,31 +515,39 @@ export class Parser {
 		if (this.prevToken) {
 			fnName = this.getText(this.prevToken)
 		}
+		fnName = fnName.toLowerCase()
 
-		if (this.hasWhitespace() || !this.accept(TokenType.ParenthesisL)) {
+		if (this.hasWhitespace() || !this.peek(TokenType.ParenthesisL)) {
 			this.restoreAtMark(pos)
 			return
 		}
 
-		if (colorFunctions.has(fnName.toLowerCase())) {
-			const cNode = this.create(nodes.ColorFunction)
-			cNode.setIdentifier(node.identifier)
-			cNode.setArguments(this.parseCssValue())
-
+		if (fnName === "theme") {
+			this.scanner.scope = ScannerScope.TwTheme
+			this.consumeToken()
+			fn.setArguments(this.parseCssValue())
+			this.scanner.scope = ScannerScope.Css
 			if (!this.accept(TokenType.ParenthesisR)) {
-				return this.finish(cNode, ParseError.RightParenthesisExpected)
+				return this.finish(fn, ParseError.RightParenthesisExpected)
 			}
-			return this.finish(cNode)
+			return this.finish(fn)
+		} else if (colorFunctions.has(fnName)) {
+			this.consumeToken()
+			const colorFn = this.create(nodes.ColorFunction)
+			colorFn.setIdentifier(fn.identifier)
+			colorFn.setArguments(this.parseCssValue())
+			if (!this.accept(TokenType.ParenthesisR)) {
+				return this.finish(colorFn, ParseError.RightParenthesisExpected)
+			}
+			return this.finish(colorFn)
+		} else {
+			this.consumeToken()
+			fn.setArguments(this.parseCssValue())
+			if (!this.accept(TokenType.ParenthesisR)) {
+				return this.finish(fn, ParseError.RightParenthesisExpected)
+			}
+			return this.finish(fn)
 		}
-
-		// TODO: url literal
-
-		node.setArguments(this.parseCssValue())
-
-		if (!this.accept(TokenType.ParenthesisR)) {
-			return this.finish(node, ParseError.RightParenthesisExpected)
-		}
-		return this.finish(node)
 	}
 
 	public parseBrackets(): nodes.Brackets | undefined {
@@ -615,6 +677,55 @@ export class Parser {
 		}
 	}
 
+	// TODO:
+	// colors.red.100
+	// colors . space . 1/1
+	// colors.space[1.5]
+	// colors.foo-5 / 10 / 10% / 20%
+
+	public _parseThemeArgument(): nodes.Node | undefined {
+		const node = this.create(nodes.Node)
+
+		while (true) {
+			if (this.peek(TokenType.Token)) {
+				node.addChild(this._parseThemeIdentifer())
+				continue
+			}
+			if (this.peek(TokenType.Delim)) {
+				node.addChild(this.create(nodes.Delim))
+				this.consumeToken()
+				continue
+			}
+			break
+		}
+		return this.finish(node)
+	}
+
+	public _parseThemeIdentifer(): nodes.TwIdentifier | undefined {
+		const node = this.create(nodes.TwIdentifier)
+		node.addChild(this.create(nodes.TwToken))
+		this.consumeToken()
+
+		while (true) {
+			if (this.peek(TokenType.Token)) {
+				node.addChild(this.create(nodes.TwToken))
+				this.consumeToken()
+				continue
+			}
+			if (this.peek(TokenType.Delim) && !this.peekDelim(".")) {
+				node.addChild(this.create(nodes.Delim))
+				this.consumeToken()
+				continue
+			} else if (!this.peek(TokenType.ParenthesisR)) {
+				this.consumeToken()
+				continue
+			}
+			break
+		}
+
+		return this.finish(node)
+	}
+
 	private getText(token = this.token) {
 		return this.scanner.source.slice(token.start, token.end)
 	}
@@ -625,6 +736,26 @@ export class Parser {
 		}
 		node.stringProvider = (start, end) => this.scanner.source.slice(start, end)
 		return `${prefix} [${node.start}, ${node.end}] ${node.typeText} "${node.text}"`
+	}
+
+	private _parseURLArgument(): nodes.Node | undefined {
+		const node = this.create(nodes.Node)
+		if (this.accept(TokenType.String) || this.accept(TokenType.BadString) || this._acceptUnquotedString()) {
+			return this.finish(node)
+		}
+	}
+
+	private _acceptUnquotedString(): boolean {
+		const pos = this.token.start
+		this.scanner.goBackTo(this.token.start)
+		const unquoted = this.scanner.scanUnquotedString()
+		if (unquoted) {
+			this.token = unquoted
+			this.consumeToken()
+			return true
+		}
+		this.scanner.goBackTo(pos)
+		return false
 	}
 
 	private devToken() {

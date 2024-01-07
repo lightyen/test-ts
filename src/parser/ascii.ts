@@ -1,6 +1,6 @@
 export const EOF = 0
-export const TAB = "\t".charCodeAt(0)
-export const Newline = "\n".charCodeAt(0)
+export const tab = "\t".charCodeAt(0)
+export const newline = "\n".charCodeAt(0)
 export const VT = "\v".charCodeAt(0)
 export const FF = "\f".charCodeAt(0)
 export const CR = "\r".charCodeAt(0)
