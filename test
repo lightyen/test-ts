@@ -1,5 +1,7 @@
 //bg-[ background-image: cross-fade(20% url(//first.png), url('second.png'))  ]/30
-bg-[theme(colors.red[5.24])]
+bg-[theme(colors.red[5.24] /***/ )]
+
+/**
 [color: theme(colorsx.foo-5 / 10 / 109% / 20%)]
 
 	[form + input, form > select]:

@@ -388,8 +388,7 @@ export class Parser {
 		const node = this.create(nodes.CssDecl)
 		const tag = this.parseIdentifier()
 		if (tag) {
-			const colon = this.acceptDelim(":")
-			if (colon) {
+			if (this.acceptDelim(":")) {
 				node.setId(tag)
 			} else {
 				this.restoreAtMark(pos)
@@ -511,7 +510,7 @@ export class Parser {
 			return
 		}
 
-		this.scanner.scope = ScannerScope.TwTheme
+		this.scanner.scope = ScannerScope.ThemeLiteral
 		this.consumeToken()
 
 		{
@@ -558,7 +557,7 @@ export class Parser {
 		}
 
 		if (fnName === "theme") {
-			this.scanner.scope = ScannerScope.TwTheme
+			this.scanner.scope = ScannerScope.ThemeLiteral
 			this.consumeToken()
 			fn.setArguments(this.parseCssValue())
 			this.scanner.scope = ScannerScope.Css
@@ -734,7 +733,7 @@ export class Parser {
 			this.consumeToken()
 		}
 
-		this.scanner.scope = ScannerScope.TwTheme
+		this.scanner.scope = ScannerScope.ThemeLiteral
 
 		if (!this.accept(TokenType.BracketR)) {
 			return this.finish(node, ParseError.RightBracketExpected)

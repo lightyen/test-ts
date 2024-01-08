@@ -216,7 +216,7 @@ type ConsumeResult = [number, true] | false
 export enum ScannerScope {
 	Tw,
 	TwModifier,
-	TwTheme,
+	ThemeLiteral,
 	URILiteral,
 	Css,
 	Raw,
@@ -248,7 +248,11 @@ export class Scanner {
 				this.supportMultiLineComment = true
 				this.supportSingleLineComment = true
 				break
-			case ScannerScope.TwTheme:
+			case ScannerScope.ThemeLiteral:
+				this.supportMultiLineComment = true
+				this.supportSingleLineComment = false
+				break
+			case ScannerScope.Raw:
 				this.supportMultiLineComment = false
 				this.supportSingleLineComment = false
 				break
@@ -445,7 +449,7 @@ export class Scanner {
 		return false
 	}
 
-	/** ascii, printable, and [^\(\)\[\]\{\}\.\:\'\;\"\,] */
+	/** ascii, printable, and [^\(\)\[\]\{\}\.] */
 	private themeChar(): ConsumeResult {
 		const ch = this.stream.peekChar()
 		switch (ch) {
@@ -649,17 +653,17 @@ export class Scanner {
 			case ScannerScope.TwModifier:
 				if (this.modifier()) return this.finishToken(TokenType.Modifier, offset, this.stream.pos())
 				break
+			case ScannerScope.ThemeLiteral:
+				if (this.themeIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
+				break
+			case ScannerScope.Raw:
+				if (this.rawIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
+				break
 			case ScannerScope.Css:
 				if (this.cssIdent()) return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
 				break
 			case ScannerScope.URILiteral:
 				if (this.cssIdent()) return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
-				break
-			case ScannerScope.TwTheme:
-				if (this.themeIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
-				break
-			case ScannerScope.Raw:
-				if (this.rawIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
 				break
 		}
 	}

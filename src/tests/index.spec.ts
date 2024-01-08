@@ -71,12 +71,7 @@ test("tw", () => {
 		`
 	const p = new Parser(new Scanner(source))
 	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
-	if (!program) {
-		return
-	}
-	for (const node of program.children) {
-		console.log(`node ${node.typeText}: [${node.start} ${node.end}]`, node.text)
-	}
+	print(program)
 })
 
 test("file", () => {
@@ -110,6 +105,16 @@ function print(node?: nodes.Node, prefix = "") {
 	if (nodes.isCssDecl(node)) {
 		print(node.id, "[css]")
 		print(node.value, "[css]")
+		return
+	}
+
+	if (nodes.isTwSpan(node)) {
+		print(node.variant, "[variant]")
+		if (node.expr) {
+			print(node.expr, "[variant]")
+		} else {
+			console.log("[variant] null")
+		}
 		return
 	}
 
