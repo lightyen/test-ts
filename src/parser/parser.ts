@@ -193,7 +193,7 @@ export class Parser {
 
 		while (true) {
 			if (this.peek(TokenType.Hyphen)) {
-				node.addChild(this.create(nodes.TwHyphen))
+				node.addChild(this.create(nodes.Hyphen))
 				this.consumeToken()
 				continue
 			}
@@ -306,8 +306,13 @@ export class Parser {
 			return
 		}
 
-		const key = this.parseTwIdentifier()
 		const decl = this.create(nodes.TwDecl)
+
+		if (this.accept(TokenType.Hyphen)) {
+			decl.minus = true
+		}
+
+		const key = this.parseTwIdentifier()
 		if (!decl.setIdentifier(key)) {
 			this.restoreAtMark(pos)
 			return
@@ -319,7 +324,7 @@ export class Parser {
 				case nodes.NodeType.TwToken:
 					skip = true
 					break
-				case nodes.NodeType.TwHyphen:
+				case nodes.NodeType.Hyphen:
 					if (this.peek(TokenType.BracketL)) {
 						this.scanner.scope = ScannerScope.Css
 						this.consumeToken()

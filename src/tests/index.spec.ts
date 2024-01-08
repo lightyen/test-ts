@@ -1,4 +1,4 @@
-import { readFileSync } from "fs"
+import { readFileSync, writeFileSync } from "fs"
 import * as nodes from "../parser/nodes"
 import { Parser } from "../parser/parser"
 import { Scanner, ScannerScope } from "../parser/scanner"

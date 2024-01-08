@@ -41,7 +41,7 @@ export enum NodeType {
 	TwModifier,
 	TwIdentifier,
 	TwToken,
-	TwHyphen,
+	Hyphen,
 	TwSlash,
 
 	TwThemeIdentifier,
@@ -267,9 +267,9 @@ export class TwToken extends Node {
 	}
 }
 
-export class TwHyphen extends Node {
+export class Hyphen extends Node {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwHyphen)
+		super(start, end, NodeType.Hyphen)
 	}
 }
 
@@ -630,6 +630,7 @@ class __TwNode extends Node {
 }
 
 export class TwDecl extends __TwNode {
+	public minus = false
 	public important = false
 	constructor(start: number, end: number) {
 		super(start, end)
