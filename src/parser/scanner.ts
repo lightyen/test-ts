@@ -219,6 +219,7 @@ export enum ScannerScope {
 	TwTheme,
 	URILiteral,
 	Css,
+	Raw,
 }
 
 export class Scanner {
@@ -454,10 +455,28 @@ export class Scanner {
 			case ASCII.rightParenthesis:
 			case ASCII.leftCurly:
 			case ASCII.rightCurly:
+			case ASCII.singleQuote:
+			case ASCII.doubleQuote:
 			case ASCII.dot:
-			case ASCII.colon:
-			case ASCII.semicolon:
-			case ASCII.comma:
+				return false
+		}
+		if ((ch >= 0x21 && ch <= 0x7e) || (ch >= 0x80 && ch <= 0xffff)) {
+			this.stream.goForward(1)
+			const end = this.stream.pos()
+			return [end, true]
+		}
+		return false
+	}
+
+	private rawChar(): ConsumeResult {
+		const ch = this.stream.peekChar()
+		switch (ch) {
+			case ASCII.leftBracket:
+			case ASCII.rightBracket:
+			case ASCII.leftParenthesis:
+			case ASCII.rightParenthesis:
+			case ASCII.leftCurly:
+			case ASCII.rightCurly:
 			case ASCII.singleQuote:
 			case ASCII.doubleQuote:
 				return false
@@ -588,6 +607,15 @@ export class Scanner {
 		return result
 	}
 
+	private rawIdent(): ConsumeResult {
+		let result: ConsumeResult = this.rawChar()
+		let t = result
+		while (t) {
+			t = this.rawChar()
+		}
+		return result
+	}
+
 	private twToken(): ConsumeResult {
 		let result: ConsumeResult = this.twIdentChar()
 		let t = result
@@ -629,6 +657,9 @@ export class Scanner {
 				break
 			case ScannerScope.TwTheme:
 				if (this.themeIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
+				break
+			case ScannerScope.Raw:
+				if (this.rawIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
 				break
 		}
 	}
@@ -726,39 +757,41 @@ export class Scanner {
 			return t
 		}
 
-		if (this.stream.goIfChar(ASCII.hash)) {
-			const result = this.name()
-			if (result) {
-				return this.finishToken(TokenType.Hash, offset, result[0])
-			} else {
-				return this.finishToken(TokenType.Delim, offset, offset + 1)
-			}
-		}
-
-		// Important
-		if (this.stream.goIfChar(ASCII.bang)) {
-			return this.finishToken(TokenType.Bang, offset, offset + 1)
-		}
-
-		// Numbers
-		if (this.number()) {
-			let end = this.stream.pos()
-
-			if (this.stream.goIfChar(ASCII.percent)) {
-				// Percentage 43%
-				return this.finishToken(TokenType.Percentage, offset, end + 1)
-			} else if (this.cssIdent()) {
-				const pos = this.stream.pos()
-				const dim = this.stream.slice(end, pos).toLowerCase()
-				const tokenType = staticUnitTable[dim]
-				if (tokenType) {
-					return this.finishToken(tokenType, offset, pos)
+		if (this.scope === ScannerScope.Css) {
+			if (this.stream.goIfChar(ASCII.hash)) {
+				const result = this.name()
+				if (result) {
+					return this.finishToken(TokenType.Hash, offset, result[0])
 				} else {
-					return this.finishToken(TokenType.Dimension, offset, pos)
+					return this.finishToken(TokenType.Delim, offset, offset + 1)
 				}
 			}
 
-			return this.finishToken(TokenType.Num, offset, end)
+			// Important
+			if (this.stream.goIfChar(ASCII.bang)) {
+				return this.finishToken(TokenType.Bang, offset, offset + 1)
+			}
+
+			// Numbers
+			if (this.number()) {
+				let end = this.stream.pos()
+
+				if (this.stream.goIfChar(ASCII.percent)) {
+					// Percentage 43%
+					return this.finishToken(TokenType.Percentage, offset, end + 1)
+				} else if (this.cssIdent()) {
+					const pos = this.stream.pos()
+					const dim = this.stream.slice(end, pos).toLowerCase()
+					const tokenType = staticUnitTable[dim]
+					if (tokenType) {
+						return this.finishToken(tokenType, offset, pos)
+					} else {
+						return this.finishToken(TokenType.Dimension, offset, pos)
+					}
+				}
+
+				return this.finishToken(TokenType.Num, offset, end)
+			}
 		}
 
 		// String, BadString

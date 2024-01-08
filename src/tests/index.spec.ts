@@ -95,19 +95,25 @@ function print(node?: nodes.Node, prefix = "") {
 	console.log(`${prefix}${node.typeText}(${node.parent?.typeText ?? "null"}): [${node.start} ${node.end}]`, node.text)
 
 	if (nodes.isFunction(node)) {
-		print(node.identifier)
-		print(node.arguments)
+		print(node.identifier, "[css-func]")
+		print(node.arguments, "[css-func]")
 		return
 	}
 
 	if (nodes.isTwDecl(node)) {
-		print(node.identifier)
-		print(node.value)
-		print(node.modifier)
+		print(node.identifier, "[tw]")
+		print(node.value, "[tw]")
+		print(node.modifier, "[tw]")
+		return
+	}
+
+	if (nodes.isCssDecl(node)) {
+		print(node.id, "[css]")
+		print(node.value, "[css]")
 		return
 	}
 
 	for (const v of node.children) {
-		print(v)
+		print(v, prefix)
 	}
 }

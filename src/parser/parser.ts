@@ -28,6 +28,13 @@ export class Parser {
 		return regEx.test(raw)
 	}
 
+	public peekStr(type: TokenType, value: string): boolean {
+		if (type !== this.token.type) {
+			return false
+		}
+		return value === this.getText()
+	}
+
 	public hasWhitespace(): boolean {
 		return !!this.prevToken && this.prevToken.end !== this.token.start
 	}
@@ -53,6 +60,10 @@ export class Parser {
 
 	public peek(type: TokenType): boolean {
 		return type === this.token.type
+	}
+
+	public type() {
+		return this.token.type
 	}
 
 	public peekDelim(text: string): boolean {
@@ -479,12 +490,20 @@ export class Parser {
 		return this.finish(node)
 	}
 
+	// TODO:
+	// colors.red.100
+	// colors . space . 1/1
+	// colors.space[1.5]
+	// colors.foo-5 / 10 / 10% / 20%
+
+	// <value>/<modifier>
+	// <value> := <id>[.<id>|<index>]
 	public parseThemeLiteral() {
 		if (!this.peekRegExp(TokenType.Identifier, /^theme$/i)) {
 			return
 		}
 		const pos = this.mark()
-		const node = this.createNode(nodes.NodeType.ThemeLiteral)
+		const node = this.create(nodes.ThemeLiteral)
 		this.accept(TokenType.Identifier)
 
 		if (this.hasWhitespace() || !this.peek(TokenType.ParenthesisL)) {
@@ -494,7 +513,23 @@ export class Parser {
 
 		this.scanner.scope = ScannerScope.TwTheme
 		this.consumeToken()
-		node.addChild(this._parseThemeArgument())
+
+		{
+			if (this.peek(TokenType.Token)) {
+				node.addChild(this.create(nodes.TwThemeIdentifier))
+				this.consumeToken()
+			}
+			while (true) {
+				if (this.peek(TokenType.BracketR) || this.peek(TokenType.ParenthesisR) || this.peek(TokenType.EOF)) {
+					break
+				}
+				if (node.addChild(this._parseThemeAccessIndentifer() || this._parseThemePropertyIdentifer())) {
+					continue
+				}
+				this.consumeToken()
+			}
+		}
+
 		this.scanner.scope = ScannerScope.Css
 
 		if (!this.accept(TokenType.ParenthesisR)) {
@@ -677,32 +712,43 @@ export class Parser {
 		}
 	}
 
-	// TODO:
-	// colors.red.100
-	// colors . space . 1/1
-	// colors.space[1.5]
-	// colors.foo-5 / 10 / 10% / 20%
+	private _parseThemeAccessIndentifer() {
+		if (!this.peek(TokenType.BracketL)) {
+			return
+		}
 
-	public _parseThemeArgument(): nodes.Node | undefined {
-		const node = this.create(nodes.Node)
+		const node = this.create(nodes.TwThemeIdentifier)
+		this.scanner.scope = ScannerScope.Raw
+		this.consumeToken()
 
 		while (true) {
 			if (this.peek(TokenType.Token)) {
-				node.addChild(this._parseThemeIdentifer())
-				continue
-			}
-			if (this.peek(TokenType.Delim)) {
-				node.addChild(this.create(nodes.Delim))
+				node.addChild(this.create(nodes.TwToken))
 				this.consumeToken()
 				continue
 			}
-			break
+			if (!this.peek(TokenType.Slash)) {
+				break
+			}
+			node.addChild(this.create(nodes.Delim))
+			this.consumeToken()
 		}
+
+		this.scanner.scope = ScannerScope.TwTheme
+
+		if (!this.accept(TokenType.BracketR)) {
+			return this.finish(node, ParseError.RightBracketExpected)
+		}
+
 		return this.finish(node)
 	}
 
-	public _parseThemeIdentifer(): nodes.TwIdentifier | undefined {
-		const node = this.create(nodes.TwIdentifier)
+	private _parseThemePropertyIdentifer() {
+		if (!this.acceptDelim(".")) {
+			return
+		}
+
+		const node = this.create(nodes.TwThemeIdentifier)
 		node.addChild(this.create(nodes.TwToken))
 		this.consumeToken()
 
@@ -712,18 +758,14 @@ export class Parser {
 				this.consumeToken()
 				continue
 			}
-			if (this.peek(TokenType.Delim) && !this.peekDelim(".")) {
-				node.addChild(this.create(nodes.Delim))
-				this.consumeToken()
-				continue
-			} else if (!this.peek(TokenType.ParenthesisR)) {
-				this.consumeToken()
-				continue
+			if (!this.peekDelim(".")) {
+				break
 			}
-			break
+			node.addChild(this.create(nodes.Delim))
+			this.consumeToken()
 		}
 
-		return this.finish(node)
+		return node
 	}
 
 	private getText(token = this.token) {

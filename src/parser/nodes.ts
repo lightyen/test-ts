@@ -43,6 +43,8 @@ export enum NodeType {
 	TwToken,
 	TwHyphen,
 	TwSlash,
+
+	TwThemeIdentifier,
 }
 
 export interface StringProvider {
@@ -250,6 +252,12 @@ export class StringLiteral extends Node {
 export class TwIdentifier extends Node {
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.TwIdentifier)
+	}
+}
+
+export class TwThemeIdentifier extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.TwThemeIdentifier)
 	}
 }
 
@@ -690,5 +698,11 @@ export class TwRawVariantSpan extends TwSpan {
 
 	constructor(start: number, end: number) {
 		super(start, end)
+	}
+}
+
+export class ThemeLiteral extends Node {
+	constructor(start: number, end: number) {
+		super(start, end, NodeType.ThemeLiteral)
 	}
 }

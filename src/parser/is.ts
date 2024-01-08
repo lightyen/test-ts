@@ -31,18 +31,25 @@ export function isTwDecl(node?: nodes.Node): node is nodes.TwDecl {
 	return node.type === nodes.NodeType.TwDecl
 }
 
-export function isTwGroup(node?: nodes.Node): node is nodes.TwGroup {
-	if (!node) {
-		return false
-	}
-	return node.type === nodes.NodeType.TwGroup
-}
-
 export function isTwRaw(node?: nodes.Node): node is nodes.TwRaw {
 	if (!node) {
 		return false
 	}
 	return node.type === nodes.NodeType.TwRaw
+}
+
+export function isCssDecl(node?: nodes.Node): node is nodes.CssDecl {
+	if (!node) {
+		return false
+	}
+	return node.type === nodes.NodeType.CssDecl
+}
+
+export function isTwGroup(node?: nodes.Node): node is nodes.TwGroup {
+	if (!node) {
+		return false
+	}
+	return node.type === nodes.NodeType.TwGroup
 }
 
 export function isTwSpan(node?: nodes.Node): node is nodes.TwSpan {
