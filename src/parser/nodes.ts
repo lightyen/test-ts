@@ -40,7 +40,7 @@ export enum NodeType {
 
 	TwModifier,
 	TwIdentifier,
-	TwToken,
+	TwLiteral,
 	Hyphen,
 	TwSlash,
 
@@ -261,9 +261,9 @@ export class TwThemeIdentifier extends Node {
 	}
 }
 
-export class TwToken extends Node {
+export class TwLiteral extends Node {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.TwToken)
+		super(start, end, NodeType.TwLiteral)
 	}
 }
 
@@ -304,7 +304,6 @@ export class Brackets extends Node {
 
 export class Function extends Node {
 	public identifier?: Identifier
-	public arguments?: CssValue
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Function)
@@ -313,13 +312,6 @@ export class Function extends Node {
 	public setIdentifier(node?: Identifier): node is Identifier {
 		return this.setNode(node, 0, node => {
 			this.identifier = node
-			this.updateRange(node)
-		})
-	}
-
-	public setArguments(node?: CssValue): node is CssValue {
-		return this.setNode(node, 0, node => {
-			this.arguments = node
 			this.updateRange(node)
 		})
 	}
@@ -372,7 +364,7 @@ export class ColorFunction extends Function {
 	}
 
 	private initColor() {
-		const expresions = this.arguments?.children
+		const expresions = this.children
 		if (!expresions || expresions.length === 0) {
 			this._a = 0
 			this._c = [0, 0, 0]
@@ -702,8 +694,9 @@ export class TwRawVariantSpan extends TwSpan {
 	}
 }
 
-export class ThemeLiteral extends Node {
+export class ThemeLiteral extends Function {
 	constructor(start: number, end: number) {
-		super(start, end, NodeType.ThemeLiteral)
+		super(start, end)
+		this.type = NodeType.ThemeLiteral
 	}
 }

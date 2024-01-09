@@ -188,7 +188,7 @@ export class Parser {
 		const pos = this.mark()
 
 		const node = this.create(nodes.TwIdentifier)
-		node.addChild(this.create(nodes.TwToken))
+		node.addChild(this.create(nodes.TwLiteral))
 		this.consumeToken()
 
 		while (true) {
@@ -199,7 +199,7 @@ export class Parser {
 			}
 			if (!this.hasWhitespace()) {
 				if (this.peek(TokenType.Token)) {
-					node.addChild(this.create(nodes.TwToken))
+					node.addChild(this.create(nodes.TwLiteral))
 					this.consumeToken()
 					continue
 				}
@@ -321,7 +321,7 @@ export class Parser {
 		let skip = false
 		if (!this.hasWhitespace()) {
 			switch (key.lastChild?.type) {
-				case nodes.NodeType.TwToken:
+				case nodes.NodeType.TwLiteral:
 					skip = true
 					break
 				case nodes.NodeType.Hyphen:
@@ -405,34 +405,34 @@ export class Parser {
 
 	public parseCssValue(): nodes.CssValue | undefined {
 		const node = this.create(nodes.CssValue)
-		node.addChild(this.parseCssExpr())
+		node.addChild(this.parseCssExpression())
 		while (this.accept(TokenType.Comma)) {
-			if (!node.addChild(this.parseCssExpr())) {
+			if (!node.addChild(this.parseCssExpression())) {
 				break
 			}
 		}
 		return this.finish(node)
 	}
 
-	public parseCssExpr(): nodes.CssExpression | undefined {
+	public parseCssExpression(): nodes.CssExpression | undefined {
 		const node = this.create(nodes.CssExpression)
 		while (node.addChild(this.parseCssTermExpr())) {}
-		return this.finish(node)
+		if (node.hasChildren()) {
+			return this.finish(node)
+		}
 	}
 
-	public parseCssTermExpr(): nodes.Node | undefined {
+	public parseCssTermExpr() {
 		return (
-			this.parseURILiteral() ||
-			this.parseThemeLiteral() ||
 			this.parseUnicodeRange() ||
 			this.parseCssFunction() ||
-			this.parseBrackets() ||
 			this.parseNamedColor() ||
 			this.parseKeywordColor() ||
 			this.parseIdentifier() ||
 			this.parseStringLiteral() ||
 			this.parseNumeric() ||
 			this.parseHexColor() ||
+			this.parseBrackets() ||
 			this.parseAny()
 		)
 	}
@@ -461,92 +461,12 @@ export class Parser {
 		return false
 	}
 
-	public parseUnaryOperator(): nodes.Node | undefined {
-		if (!this.peekDelim("+") && !this.peekDelim("-")) {
-			return
-		}
-		const node = this.createNode(nodes.NodeType.Delim)
-		this.consumeToken()
-		return this.finish(node)
-	}
-
-	public parseURILiteral() {
-		if (!this.peekRegExp(TokenType.Identifier, /^url(-prefix)?$/i)) {
-			return
-		}
-		const pos = this.mark()
-		const node = this.createNode(nodes.NodeType.URILiteral)
-		this.accept(TokenType.Identifier)
-
-		if (this.hasWhitespace() || !this.peek(TokenType.ParenthesisL)) {
-			this.restoreAtMark(pos)
-			return
-		}
-
-		this.scanner.scope = ScannerScope.URILiteral
-		this.consumeToken()
-		node.addChild(this._parseURLArgument())
-		this.scanner.scope = ScannerScope.Css
-
-		if (!this.accept(TokenType.ParenthesisR)) {
-			return this.finish(node, ParseError.RightParenthesisExpected)
-		}
-		return this.finish(node)
-	}
-
-	// TODO:
-	// colors.red.100
-	// colors . space . 1/1
-	// colors.space[1.5]
-	// colors.foo-5 / 10 / 10% / 20%
-
-	// <value>/<modifier>
-	// <value> := <id>[.<id>|<index>]
-	public parseThemeLiteral() {
-		if (!this.peekRegExp(TokenType.Identifier, /^theme$/i)) {
-			return
-		}
-		const pos = this.mark()
-		const node = this.create(nodes.ThemeLiteral)
-		this.accept(TokenType.Identifier)
-
-		if (this.hasWhitespace() || !this.peek(TokenType.ParenthesisL)) {
-			this.restoreAtMark(pos)
-			return
-		}
-
-		this.scanner.scope = ScannerScope.ThemeLiteral
-		this.consumeToken()
-
-		{
-			if (this.peek(TokenType.Token)) {
-				node.addChild(this.create(nodes.TwThemeIdentifier))
-				this.consumeToken()
-			}
-			while (true) {
-				if (this.peek(TokenType.BracketR) || this.peek(TokenType.ParenthesisR) || this.peek(TokenType.EOF)) {
-					break
-				}
-				if (node.addChild(this._parseThemeAccessIndentifer() || this._parseThemePropertyIdentifer())) {
-					continue
-				}
-				this.consumeToken()
-			}
-		}
-
-		this.scanner.scope = ScannerScope.Css
-
-		if (!this.accept(TokenType.ParenthesisR)) {
-			return this.finish(node, ParseError.RightParenthesisExpected)
-		}
-		return this.finish(node)
-	}
-
 	public parseCssFunction(): nodes.Function | undefined {
 		const pos = this.mark()
+		const node = this.create(nodes.Function)
 
-		const fn = this.create(nodes.Function)
-		if (!fn.setIdentifier(this.parseIdentifier())) {
+		if (!node.setIdentifier(this.parseIdentifier())) {
+			this.restoreAtMark(pos)
 			return
 		}
 
@@ -562,31 +482,47 @@ export class Parser {
 		}
 
 		if (fnName === "theme") {
+			// colors.red.100
+			// colors . space . 1/1
+			// colors.space[1.5]
+			// colors.foo-5 / 10 / 10% / 20%
+			// <value>/<modifier>
+			// <value> := <id>[.<id>|<index>]
 			this.scanner.scope = ScannerScope.ThemeLiteral
 			this.consumeToken()
-			fn.setArguments(this.parseCssValue())
+			if (this.peek(TokenType.Token)) {
+				node.addChild(this.create(nodes.TwThemeIdentifier))
+				this.consumeToken()
+			}
+			while (true) {
+				if (this.peek(TokenType.BracketR) || this.peek(TokenType.ParenthesisR) || this.peek(TokenType.EOF)) {
+					break
+				}
+				if (node.addChild(this._parseThemeAccessIndentifer() || this._parseThemePropertyIdentifer())) {
+					continue
+				}
+				this.consumeToken()
+			}
 			this.scanner.scope = ScannerScope.Css
-			if (!this.accept(TokenType.ParenthesisR)) {
-				return this.finish(fn, ParseError.RightParenthesisExpected)
-			}
-			return this.finish(fn)
-		} else if (colorFunctions.has(fnName)) {
+		} else if (/^url(-prefix)?$/.test(fnName)) {
+			node.type = nodes.NodeType.URILiteral
+			this.scanner.scope = ScannerScope.URILiteral
 			this.consumeToken()
-			const colorFn = this.create(nodes.ColorFunction)
-			colorFn.setIdentifier(fn.identifier)
-			colorFn.setArguments(this.parseCssValue())
-			if (!this.accept(TokenType.ParenthesisR)) {
-				return this.finish(colorFn, ParseError.RightParenthesisExpected)
-			}
-			return this.finish(colorFn)
+			node.addChild(this._parseURLArgument())
+			this.scanner.scope = ScannerScope.Css
+		} else if (colorFunctions.has(fnName)) {
+			node.type = nodes.NodeType.ColorFunction
+			this.consumeToken()
+			node.addChild(this.parseCssValue())
 		} else {
 			this.consumeToken()
-			fn.setArguments(this.parseCssValue())
-			if (!this.accept(TokenType.ParenthesisR)) {
-				return this.finish(fn, ParseError.RightParenthesisExpected)
-			}
-			return this.finish(fn)
+			node.addChild(this.parseCssValue())
 		}
+
+		if (!this.accept(TokenType.ParenthesisR)) {
+			return this.finish(node, ParseError.RightParenthesisExpected)
+		}
+		return this.finish(node)
 	}
 
 	public parseBrackets(): nodes.Brackets | undefined {
@@ -727,7 +663,7 @@ export class Parser {
 
 		while (true) {
 			if (this.peek(TokenType.Token)) {
-				node.addChild(this.create(nodes.TwToken))
+				node.addChild(this.create(nodes.TwLiteral))
 				this.consumeToken()
 				continue
 			}
@@ -753,12 +689,12 @@ export class Parser {
 		}
 
 		const node = this.create(nodes.TwThemeIdentifier)
-		node.addChild(this.create(nodes.TwToken))
+		node.addChild(this.create(nodes.TwLiteral))
 		this.consumeToken()
 
 		while (true) {
 			if (this.peek(TokenType.Token)) {
-				node.addChild(this.create(nodes.TwToken))
+				node.addChild(this.create(nodes.TwLiteral))
 				this.consumeToken()
 				continue
 			}

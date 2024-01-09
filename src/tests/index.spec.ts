@@ -65,7 +65,7 @@ test("tw", () => {
 	[:where(&) :is(h1, h2, h3, h4)]
 	[#wrapper > * > div > .text]:
 	[@media (min-height: 400px)]:flex
-	[content: '[' ] grid-col-[& [cmdk-group-heading]] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]
+	[content: 'v[' ] grid-col-[& [cmdk-group-heading]] vov-[ data ]/[ yoc=k ] text-[color(srgb 1 1 1)]
 	sm:hover:text-gb
 	(sm:hover: just:vv):quqo-100
 		`
@@ -91,7 +91,9 @@ function print(node?: nodes.Node, prefix = "") {
 
 	if (nodes.isFunction(node)) {
 		print(node.identifier, "[css-func]")
-		print(node.arguments, "[css-func]")
+		for (const v of node.children) {
+			print(v, "[css-func]")
+		}
 		return
 	}
 
