@@ -5,7 +5,7 @@ import { Scanner, ScannerScope } from "../parser/scanner"
 
 test("css", () => {
 	const source = "hsl(160 42% 30% 123 / .3 ), // 重新 , #33333366 ,color(rec2020 1 1 1/ 4), chocolate transparent"
-	const p = new Parser(new Scanner(source, ScannerScope.Css))
+	const p = new Parser(new Scanner(source, ScannerScope.CssValue))
 	const n = p.parse(source, p.parseCssValue, (start, end) => source.slice(start, end))
 	if (!n) {
 		return
@@ -33,7 +33,7 @@ test("css", () => {
 
 test("a", () => {
 	const source = "& [cmdk-group-heading]"
-	const p = new Parser(new Scanner(source, ScannerScope.Css))
+	const p = new Parser(new Scanner(source, ScannerScope.CssValue))
 	const n = p.parse(source, p.parseCssDecl, (start, end) => source.slice(start, end))
 	if (!n) {
 		return
@@ -76,6 +76,14 @@ test("tw", () => {
 
 test("file", () => {
 	const data = readFileSync("test", "utf8")
+	const source = data
+	const p = new Parser(new Scanner(source))
+	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
+	print(program)
+})
+
+test("selector", () => {
+	const data = readFileSync("selector", "utf8")
 	const source = data
 	const p = new Parser(new Scanner(source))
 	const program = p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))

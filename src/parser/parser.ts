@@ -264,7 +264,7 @@ export class Parser {
 		}
 
 		const raw = this.create(nodes.TwRaw)
-		this.scanner.scope = ScannerScope.Css
+		this.scanner.scope = ScannerScope.CssValue
 		if (!this.accept(TokenType.BracketL)) {
 			this.restoreAtMark(pos)
 			this.scanner.scope = ScannerScope.Tw
@@ -326,7 +326,7 @@ export class Parser {
 					break
 				case nodes.NodeType.Hyphen:
 					if (this.peek(TokenType.BracketL)) {
-						this.scanner.scope = ScannerScope.Css
+						this.scanner.scope = ScannerScope.CssValue
 						this.consumeToken()
 						decl.setValue(this.parseCssDecl())
 						this.scanner.scope = ScannerScope.Tw
@@ -503,13 +503,13 @@ export class Parser {
 				}
 				this.consumeToken()
 			}
-			this.scanner.scope = ScannerScope.Css
+			this.scanner.scope = ScannerScope.CssValue
 		} else if (/^url(-prefix)?$/.test(fnName)) {
 			node.type = nodes.NodeType.URILiteral
 			this.scanner.scope = ScannerScope.URILiteral
 			this.consumeToken()
 			node.addChild(this._parseURLArgument())
-			this.scanner.scope = ScannerScope.Css
+			this.scanner.scope = ScannerScope.CssValue
 		} else if (colorFunctions.has(fnName)) {
 			node.type = nodes.NodeType.ColorFunction
 			this.consumeToken()
@@ -529,22 +529,25 @@ export class Parser {
 		const node = this.create(nodes.Brackets)
 
 		if (this.accept(TokenType.ParenthesisL)) {
-			node.setValue(this.parseCssDecl())
+			node.addChild(this.parseCssDecl())
 			if (!this.accept(TokenType.ParenthesisR)) {
 				return this.finish(node, ParseError.RightParenthesisExpected)
 			}
+			return this.finish(node)
 		} else if (this.accept(TokenType.BracketL)) {
 			node.brackets = [ASCII.leftBracket, ASCII.rightBracket]
-			node.setValue(this.parseCssDecl())
+			const x = node.addChild(this.parseCssDecl())
 			if (!this.accept(TokenType.BracketR)) {
 				return this.finish(node, ParseError.RightBracketExpected)
 			}
+			return this.finish(node)
 		} else if (this.accept(TokenType.CurlyL)) {
 			node.brackets = [ASCII.leftCurly, ASCII.rightCurly]
-			node.setValue(this.parseCssDecl())
+			node.addChild(this.parseCssDecl())
 			if (!this.accept(TokenType.CurlyR)) {
 				return this.finish(node, ParseError.RightCurlyExpected)
 			}
+			return this.finish(node)
 		}
 
 		return undefined

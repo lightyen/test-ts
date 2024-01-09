@@ -218,7 +218,8 @@ export enum ScannerScope {
 	TwModifier,
 	ThemeLiteral,
 	URILiteral,
-	Css,
+	CssSelector,
+	CssValue,
 	Raw,
 }
 
@@ -256,7 +257,11 @@ export class Scanner {
 				this.supportMultiLineComment = false
 				this.supportSingleLineComment = false
 				break
-			case ScannerScope.Css:
+			case ScannerScope.CssSelector:
+				this.supportMultiLineComment = false
+				this.supportSingleLineComment = false
+				break
+			case ScannerScope.CssValue:
 				this.supportMultiLineComment = true
 				this.supportSingleLineComment = false
 				break
@@ -659,7 +664,10 @@ export class Scanner {
 			case ScannerScope.Raw:
 				if (this.rawIdent()) return this.finishToken(TokenType.Token, offset, this.stream.pos())
 				break
-			case ScannerScope.Css:
+			case ScannerScope.CssSelector:
+				if (this.cssIdent()) return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
+				break
+			case ScannerScope.CssValue:
 				if (this.cssIdent()) return this.finishToken(TokenType.Identifier, offset, this.stream.pos())
 				break
 			case ScannerScope.URILiteral:
@@ -724,8 +732,7 @@ export class Scanner {
 
 			if (this.stream.peekChar() === closeQuote) {
 				this.stream.nextChar()
-				end += 1
-				return [end, TokenType.String]
+				return [this.stream.pos(), TokenType.String]
 			} else {
 				return [end, TokenType.BadString]
 			}
@@ -761,7 +768,7 @@ export class Scanner {
 			return t
 		}
 
-		if (this.scope === ScannerScope.Css) {
+		if (this.scope === ScannerScope.CssSelector || this.scope === ScannerScope.CssValue) {
 			if (this.stream.goIfChar(ASCII.hash)) {
 				const result = this.name()
 				if (result) {
@@ -801,7 +808,7 @@ export class Scanner {
 		// String, BadString
 		const ret = this.string()
 		if (ret) {
-			return this.finishToken(ret[1], offset + 1, ret[0])
+			return this.finishToken(ret[1], offset, ret[0])
 		}
 
 		const tokenType = staticTokenTable[this.stream.peekChar()]

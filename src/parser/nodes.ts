@@ -287,18 +287,10 @@ export class Delim extends Node {
 
 export class Brackets extends Node {
 	public brackets: [number, number]
-	public value?: CssDecl
 
 	constructor(start: number, end: number) {
 		super(start, end, NodeType.Parentheses)
 		this.brackets = [ASCII.leftParenthesis, ASCII.rightParenthesis]
-	}
-
-	public setValue(node?: CssDecl): node is CssDecl {
-		return this.setNode(node, 0, node => {
-			this.value = node
-			this.updateRange(node)
-		})
 	}
 }
 
