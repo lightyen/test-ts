@@ -82,6 +82,13 @@ test("file", () => {
 	print(program)
 })
 
+test("list", () => {
+	const data = readFileSync("list", "utf8")
+	const source = data
+	const p = new Parser(new Scanner(source))
+	p.parse(source, p.parseTwProgram, (start, end) => source.slice(start, end))
+})
+
 function print(node?: nodes.Node, prefix = "") {
 	if (!node) {
 		return
