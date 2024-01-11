@@ -1,0 +1,21 @@
+pseudo selector https://developer.mozilla.org/zh-CN/docs/Web/CSS/Pseudo-classes
+
+:<ident>(<selector>)
+
+pseudo element https://developer.mozilla.org/en-US/docs/Web/CSS/Pseudo-elements
+
+::<ident>(<selector>)
+
+at-rule https://developer.mozilla.org/en-US/docs/Web/CSS/At-rule
+
+@<ident> (rule)
+
+combinator
+
+<selector> <op> <selector>
+
+classname
+
+.<ident>
+
+
