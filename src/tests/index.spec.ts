@@ -3,6 +3,7 @@ import * as nodes from "../parser/nodes"
 import { Parser } from "../parser/parser"
 import { Scanner, Scope, TokenType } from "../parser/scanner"
 import { ParseError, Rule } from "../parser/errors"
+import { expect, test } from "vitest"
 
 function assertNode<Node extends nodes.Node, U extends Node | undefined>(
 	source: string,

@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["@types/node", "@types/jest"],
+    "types": ["@types/node"],
     "strictNullChecks": true,
     "noImplicitAny": false,
     "noImplicitThis": true,
