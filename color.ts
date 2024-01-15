@@ -10,6 +10,10 @@ type XYZSpace = "xyz" | "xyz-d50" | "xyz-d65"
 
 type ColorSpace = PredefinedRGB | XYZSpace
 
+function clamp(min: number, val: number, max: number) {
+	return Math.max(Math.min(val, max), min)
+}
+
 export class Color {
 	constructor(
 		/** range [0-1] */
@@ -21,10 +25,10 @@ export class Color {
 		/** range [0-1] */
 		readonly a = 1,
 	) {
-		this.r = Math.min(1, Math.max(r, 0))
-		this.g = Math.min(1, Math.max(g, 0))
-		this.b = Math.min(1, Math.max(b, 0))
-		this.a = Math.min(1, Math.max(a, 0))
+		this.r = clamp(0, r, 1)
+		this.g = clamp(0, g, 1)
+		this.b = clamp(0, b, 1)
+		this.a = clamp(0, a, 1)
 	}
 
 	/** https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/color */
